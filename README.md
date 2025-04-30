@@ -1,75 +1,111 @@
 # Piper TTS Training
 
-This is a local adaptation of the Piper TTS training notebook. It provides a more organized way to train TTS models using Piper.
+A simple and organized way to train your own Text-to-Speech (TTS) model using Piper. This guide will walk you through the entire process step by step.
 
-## Project Structure
+## 🚀 Quick Start Guide
 
-```
-.
-├── config.py          # Configuration classes
-├── config.json        # Sample configuration file
-├── train.py          # Main training script
-├── wavs/             # Directory for audio files
-└── metadata.csv      # Transcription file
-```
+### Step 1: Setup Your Environment
+1. Make sure you have Python installed (version 3.8 or higher)
+2. Run the setup script:
+   ```bash
+   setup_environment.bat
+   ```
+   This will install all required dependencies automatically.
 
-## Setup
+### Step 2: Prepare Your Audio Files
+1. Create a folder named `wavs` in the project directory
+2. Add your audio files to the `wavs` folder
+   - Files must be in WAV format
+   - Use 16-bit audio
+   - Use mono channel (not stereo)
+   - Recommended sample rate: 22050 Hz or 16000 Hz
+   - Keep file names simple (e.g., `audio1.wav`, `audio2.wav`)
 
-1. Install the required dependencies:
-```bash
-pip install -r requirements.txt
-```
+### Step 3: Create Your Metadata File
+1. Create a file named `metadata.csv` in the project directory
+2. Add your transcriptions in this format:
+   ```
+   filename|transcription
+   audio1.wav|This is the first sentence
+   audio2.wav|This is the second sentence
+   ```
+   - Each line should contain the filename and its transcription, separated by a pipe (|)
+   - Make sure the transcriptions are accurate
+   - You can use a text editor or spreadsheet program to create this file
 
-2. Prepare your dataset:
-   - Place your audio files in the `wavs/` directory
-   - Create a `metadata.csv` file with transcriptions (or use Whisper for transcription)
+### Step 4: Configure Your Training
+1. Open `config.json` in a text editor
+2. Set these important settings:
+   ```json
+   {
+     "language": "en-us",  // Change to your language code
+     "sample_rate": 22050, // Match your audio files' sample rate
+     "quality": "medium",  // Choose: "high", "medium", or "x-low"
+     "batch_size": 32,     // Adjust based on your computer's memory
+     "max_epochs": 1000    // Number of training cycles
+   }
+   ```
 
-## Configuration
+### Step 5: Start Training
+1. Run the training script:
+   ```bash
+   python train.py --config config.json
+   ```
+2. The program will:
+   - Check your audio files
+   - Process the data
+   - Start training
+   - Save progress automatically
 
-The training process can be configured using the `config.json` file. Here are the main options:
+### Step 6: Monitor Progress
+1. Open a new terminal
+2. Run TensorBoard to see training graphs:
+   ```bash
+   tensorboard --logdir output
+   ```
+3. Open your web browser and go to: `http://localhost:6006`
 
-### Dataset Configuration
-- `wav_dir`: Directory containing WAV files
-- `metadata_file`: Path to metadata file
-- `language`: Language code (e.g., "en-us")
-- `sample_rate`: Audio sample rate (22050 or 16000)
-- `dataset_format`: Dataset format ("ljspeech" or "mycroft")
-- `single_speaker`: Whether the dataset is single-speaker
-- `use_whisper`: Whether to use Whisper for transcription
+### Step 7: Using Your Trained Model
+1. Once training is complete, your model will be in the `output` folder
+2. You can use this model with Piper TTS to generate speech
 
-### Training Configuration
-- `model_name`: Name of the model
-- `output_dir`: Directory to save outputs
-- `batch_size`: Training batch size
-- `quality`: Model quality ("high", "medium", or "x-low")
-- `max_epochs`: Maximum number of training epochs
-- `checkpoint_epochs`: How often to save checkpoints
-- `num_ckpt`: Number of checkpoints to keep
-- `log_every_n_steps`: How often to log training progress
-- `validation_split`: Validation split ratio
-- `num_test_examples`: Number of test examples
-- `save_last`: Whether to save the last model
-- `action`: Training action ("train", "continue", "finetune", or "convert")
-- `pretrained_checkpoint`: Path to pretrained checkpoint (for finetuning)
+## 📝 Important Notes
 
-## Usage
+- **Hardware Requirements:**
+  - A computer with at least 8GB RAM
+  - A GPU is recommended for faster training
+  - Sufficient disk space for your dataset and model
 
-1. Modify `config.json` according to your needs
-2. Run the training script:
-```bash
-python train.py --config config.json
-```
+- **Training Time:**
+  - Small datasets (1-2 hours): 1-2 days
+  - Medium datasets (5-10 hours): 3-5 days
+  - Large datasets (20+ hours): 1-2 weeks
 
-## Monitoring Training
+- **Tips for Better Results:**
+  - Use high-quality audio recordings
+  - Ensure accurate transcriptions
+  - Include a variety of sentences
+  - More data usually means better results
 
-To monitor training progress, you can use TensorBoard:
-```bash
-tensorboard --logdir output
-```
+## 🆘 Troubleshooting
 
-## Notes
+If you encounter any issues:
+1. Check that your audio files are in the correct format
+2. Verify your metadata.csv format
+3. Make sure all paths in config.json are correct
+4. Check that you have enough disk space
+5. Ensure all dependencies are installed correctly
 
-- For GPU training, make sure you have CUDA installed
-- The Whisper transcription feature requires additional setup
-- Make sure your audio files are in the correct format (WAV, 16-bit, mono)
-- For large datasets, consider adjusting batch size and checkpoint frequency 
+## 📚 Additional Resources
+
+- [Piper TTS Documentation](https://github.com/rhasspy/piper)
+- [Audio Format Requirements](https://github.com/rhasspy/piper#audio-format)
+- [Training Tips and Best Practices](https://github.com/rhasspy/piper#training)
+
+## 🤝 Need Help?
+
+If you're stuck or have questions:
+1. Check the troubleshooting section above
+2. Review the error messages carefully
+3. Make sure you followed all steps correctly
+4. If still having issues, you can open an issue on GitHub 

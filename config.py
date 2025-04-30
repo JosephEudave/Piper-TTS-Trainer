@@ -6,7 +6,7 @@ class DatasetConfig:
     """Configuration for dataset handling"""
     wav_dir: str = "wavs"  # Directory containing wav files
     metadata_file: str = "metadata.csv"  # Path to metadata file
-    language: str = "en-us"  # Language code
+    language: str = "es-mx"  # Language code
     sample_rate: int = 22050  # Sample rate for audio
     dataset_format: Literal["ljspeech", "mycroft"] = "ljspeech"
     single_speaker: bool = True
