@@ -1,0 +1,26 @@
+{
+    "dataset": {
+        "wav_dir": "wavs",
+        "metadata_file": "metadata.csv",
+        "language": "en-us",
+        "sample_rate": 22050,
+        "dataset_format": "ljspeech",
+        "single_speaker": true,
+        "use_whisper": false
+    },
+    "training": {
+        "model_name": "my_model",
+        "output_dir": "output",
+        "batch_size": 12,
+        "quality": "medium",
+        "max_epochs": 10000,
+        "checkpoint_epochs": 5,
+        "num_ckpt": 1,
+        "log_every_n_steps": 1000,
+        "validation_split": 0.01,
+        "num_test_examples": 1,
+        "save_last": false,
+        "action": "train",
+        "pretrained_checkpoint": null
+    }
+} 
