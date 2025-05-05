@@ -5,12 +5,16 @@ A simple and organized way to train your own Text-to-Speech (TTS) model using Pi
 ## 🚀 Quick Start Guide
 
 ### Step 1: Setup Your Environment
-1. Make sure you have Python installed (version 3.8 or higher)
+1. Make sure you have Python installed (version 3.9 or higher)
 2. Run the setup script:
    ```bash
    setup_environment.bat
    ```
-   This will install all required dependencies automatically.
+   This will create a virtual environment and install all required dependencies automatically.
+3. Activate the virtual environment:
+   ```bash
+   venv\Scripts\activate
+   ```
 
 ### Step 2: Prepare Your Audio Files
 1. Create a folder named `wavs` in the project directory
@@ -73,7 +77,7 @@ A simple and organized way to train your own Text-to-Speech (TTS) model using Pi
 
 - **Hardware Requirements:**
   - A computer with at least 8GB RAM
-  - A GPU is recommended for faster training
+  - A GPU is recommended for faster training (CUDA compatible)
   - Sufficient disk space for your dataset and model
 
 - **Training Time:**
@@ -94,7 +98,8 @@ If you encounter any issues:
 2. Verify your metadata.csv format
 3. Make sure all paths in config.json are correct
 4. Check that you have enough disk space
-5. Ensure all dependencies are installed correctly
+5. Ensure the virtual environment is properly activated
+6. Make sure all dependencies are installed correctly by running `pip list` in the activated environment
 
 ## 📚 Additional Resources
 

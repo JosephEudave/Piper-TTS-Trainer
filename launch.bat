@@ -1,14 +1,14 @@
 @echo off
 echo Starting Piper TTS Preprocessor...
 
-:: Activate the environment
-call conda activate piperTrain
-
-:: Check if environment exists
-if errorlevel 1 (
-    echo Environment not found. Creating it...
+:: Check if virtual environment exists
+if not exist venv (
+    echo Virtual environment not found. Creating it...
     call setup_environment.bat
 )
+
+:: Activate the environment
+call venv\Scripts\activate
 
 :: Start the GUI
 python preprocess_gui.py

@@ -1,7 +1,6 @@
-Defaulting to user installation because normal site-packages is not writeable
 Collecting cython
   Downloading Cython-3.0.12-cp313-cp313-win_amd64.whl.metadata (3.6 kB)
 Downloading Cython-3.0.12-cp313-cp313-win_amd64.whl (2.8 MB)
-   ---------------------------------------- 2.8/2.8 MB 3.0 MB/s eta 0:00:00
+   ---------------------------------------- 2.8/2.8 MB 1.4 MB/s eta 0:00:00
 Installing collected packages: cython
 Successfully installed cython-3.0.12

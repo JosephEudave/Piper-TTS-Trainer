@@ -1,23 +1,31 @@
 @echo off
-echo Creating Anaconda environment for Piper TTS training...
+echo Creating virtual environment for Piper TTS training...
 
-:: Create the environment
-conda create -n piperTrain python=3.9 -y
+:: Check if Python is installed
+python --version
+if errorlevel 1 (
+    echo Python not found. Please install Python 3.9 or higher.
+    exit /b 1
+)
+
+:: Create the virtual environment
+python -m venv venv
 
 :: Activate the environment
-call conda activate piperTrain
+call venv\Scripts\activate
 
-:: Install basic dependencies
-conda install -y pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
-conda install -y numpy pandas scipy librosa tqdm
-
-:: Install additional packages via pip
+:: Install dependencies using pip
+pip install --upgrade pip
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install numpy pandas scipy librosa tqdm
 pip install piper-phonemize==1.1.0
 pip install onnxruntime>=1.15.0
 pip install pytorch-lightning
 pip install faster-whisper
 pip install tensorboard
 pip install cython>=0.29.0
+pip install soundfile>=0.12.1
+pip install PyQt5>=5.15.0
 
 echo Environment setup complete!
-echo To activate the environment, run: conda activate piperTrain 
+echo To activate the environment, run: venv\Scripts\activate 
