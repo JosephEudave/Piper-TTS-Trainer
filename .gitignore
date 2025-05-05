@@ -18,6 +18,8 @@ checkpoints/
 models/
 *.pt
 *.pth
+piper/
+piper-phonemize/
 
 # Python
 __pycache__/
