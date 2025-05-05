@@ -1,0 +1,70 @@
+# Piper TTS Trainer - Command Reference
+# These commands can be run in your Linux environment (native or WSL)
+
+# ======== Environment Setup ========
+
+# Activate the virtual environment
+source ~/piper_tts_trainer/.venv/bin/activate
+
+# ======== Dataset Preprocessing ========
+
+# Preprocess dataset in LJSpeech format
+python3 -m piper_train.preprocess \
+  --language en \
+  --input-dir ~/piper_tts_trainer/datasets/my-dataset \
+  --output-dir ~/piper_tts_trainer/training/my-training \
+  --dataset-format ljspeech \
+  --single-speaker \
+  --sample-rate 22050
+
+# ======== Training ========
+
+# Train from scratch (not recommended, use checkpoint instead)
+python3 -m piper_train \
+  --dataset-dir ~/piper_tts_trainer/training/my-training \
+  --accelerator gpu \
+  --devices 1 \
+  --batch-size 32 \
+  --validation-split 0.0 \
+  --num-test-examples 0 \
+  --max_epochs 6000 \
+  --checkpoint-epochs 1 \
+  --precision 32
+
+# Train from a checkpoint (recommended)
+python3 -m piper_train \
+  --dataset-dir ~/piper_tts_trainer/training/my-training \
+  --accelerator gpu \
+  --devices 1 \
+  --batch-size 32 \
+  --validation-split 0.0 \
+  --num-test-examples 0 \
+  --max_epochs 6000 \
+  --resume_from_checkpoint ~/piper_tts_trainer/checkpoints/en/us/amy/medium/epoch=2000-step=12345.ckpt \
+  --checkpoint-epochs 1 \
+  --precision 32
+
+# ======== Testing ========
+
+# Test with a specific audio prompt
+python3 -m piper_train.infer \
+  ~/piper_tts_trainer/training/my-training/lightning_logs/version_0/checkpoints/epoch=XXXX-step=YYYYY.ckpt \
+  "This is a test of my custom voice model."
+
+# ======== Export Model ========
+
+# Export trained model to ONNX format
+python3 -m piper_train.export_onnx \
+  ~/piper_tts_trainer/training/my-training/lightning_logs/version_0/checkpoints/epoch=XXXX-step=YYYYY.ckpt \
+  ~/piper_tts_trainer/models/my-model.onnx
+
+# Copy the config file
+cp ~/piper_tts_trainer/training/my-training/config.json \
+   ~/piper_tts_trainer/models/my-model.onnx.json
+
+# ======== Using Your Trained Model ========
+
+# Generate speech with your model
+piper --model ~/piper_tts_trainer/models/my-model.onnx \
+      --output_file output.wav \
+      "This is a test of my trained voice model." 

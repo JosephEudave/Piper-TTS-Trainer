@@ -1,226 +1,104 @@
 # Piper TTS Trainer
 
-A user-friendly interface for training Piper Text-to-Speech models.
+A simplified interface for training custom voice models with Piper TTS, built for Linux environments.
+
+## Overview
+
+This project provides a user-friendly way to train custom text-to-speech voices using Piper TTS. It uses a Gradio web interface to make the complex process of voice training more accessible, running completely in Linux for maximum compatibility.
+
+## Requirements
+
+- Linux environment (Native Linux or WSL on Windows)
+- Python 3.8+
+- Internet connection (for downloading models and dependencies)
+- For GPU acceleration (recommended): NVIDIA GPU with CUDA support
 
 ## Quick Start
 
-1. Make sure you have Python 3.9 or higher installed
-2. Run `launch.bat` - this will set up the environment and start the application
-3. Access the web interface at http://127.0.0.1:7860
-
-## Installation
-
-### Automatic Setup (Recommended)
-
-Simply run the `setup.bat` script, which will:
-- Create a virtual environment (if not exists)
-- Install all required dependencies
-- Fix any common issues with package compatibility
-- Check for the piper_train module
-
-### Manual Setup
-
-If you prefer to set up manually:
-
-1. Create a virtual environment:
+1. Clone this repository:
    ```
-   python -m venv venv
+   git clone https://github.com/josepheudave/Piper-TTS-Trainer.git
+   cd Piper-TTS-Trainer
    ```
 
-2. Activate the environment:
+2. Run the setup script:
    ```
-   venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```
-   pip install -r requirements.txt
+   chmod +x setup.sh
+   ./setup.sh
    ```
 
-## Usage
+3. Launch the Gradio interface:
+   ```
+   ~/piper_tts_trainer/launch.sh
+   ```
 
-### Launching the Application
-
-Run `launch.bat` to start the application. This will:
-- Check if the environment is properly set up
-- Start the Gradio web interface
-
-### Training Functionality
-
-**Note:** For training functionality, you need the `piper_train` module.
-See [PIPER_TRAIN_INFO.md](PIPER_TRAIN_INFO.md) for instructions on installing it.
+4. Open your browser and navigate to: http://localhost:7860
 
 ## Features
 
-- Preprocess audio files for TTS training
-- Configure model training parameters
-- Train TTS models with different quality settings
-- Easy-to-use web interface
+- **Pre-trained Models**: Browse and download checkpoint models from Hugging Face
+- **Dataset Configuration**: Preprocess your audio datasets for training
+- **Training**: Configure and run model training with GPU acceleration (if available)
+- **Export**: Convert trained models to ONNX format for use with Piper
+
+## Using the Interface
+
+### Pre-trained Models
+
+1. Select the language, region, voice, and quality
+2. Choose a checkpoint model
+3. Click "Download Selected Checkpoint"
+
+### Dataset Configuration
+
+1. Prepare your dataset in LJSpeech, Mycroft, or VCTK format
+2. Enter the path to your dataset
+3. Configure dataset parameters
+4. Click "Preprocess Dataset"
+
+### Training
+
+1. Select your preprocessed dataset
+2. Choose a checkpoint to start from
+3. Configure training parameters (batch size, epochs, etc.)
+4. Click "Start Training"
+
+### Export Model
+
+1. Enter the path to your trained checkpoint
+2. Set the export directory and model name
+3. Click "Export Model"
+
+## Dataset Format
+
+For LJSpeech format (recommended):
+1. Create a folder with:
+   - A `metadata.csv` file with `|` as delimiter
+   - Format: `id|text`
+   - A `wav` directory containing audio files named `id.wav`
+2. Place your dataset in the ~/piper_tts_trainer/datasets directory
+
+## For Windows Users (Using WSL)
+
+If you're using Windows, you'll need to install and set up WSL (Windows Subsystem for Linux):
+
+1. Install WSL by running `wsl --install` in PowerShell (admin)
+2. Install Ubuntu from the Microsoft Store
+3. Open Ubuntu and complete the setup
+4. Navigate to this project and follow the Linux instructions above
 
 ## Troubleshooting
 
-If you encounter any issues:
+- If the interface doesn't open, check that the launch script is running correctly
+- For GPU training issues, verify that CUDA is properly installed
+- Dataset paths should be Linux paths (e.g., `/home/username/piper_tts_trainer/datasets/my-dataset`)
 
-1. Run `setup.bat` to ensure all dependencies are properly installed
-2. Check the console output for specific error messages
-3. For training-related issues, ensure the piper_train module is installed correctly
+## Notes
 
-## File Structure
+- Training can take several hours to days depending on your hardware and dataset size
+- GPU acceleration significantly improves training speed
 
-- `launch.bat` - Main launcher script
-- `setup.bat` - Comprehensive setup script
-- `requirements.txt` - List of required dependencies
-- `gradio_interface.py` - Main application interface
-- `config.py` - Configuration settings
-- `PIPER_TRAIN_INFO.md` - Information about the piper_train module
-
-## 🚀 Quick Start Guide
-
-### Step 1: Setup Your Environment
-1. Make sure you have Python installed (version 3.9 or higher)
-2. Run the setup script:
-   ```bash
-   setup_environment.bat
-   ```
-   This will create a virtual environment and install all required dependencies automatically.
-3. Activate the virtual environment:
-   ```bash
-   venv\Scripts\activate
-   ```
-
-### Step 2: Using the Graphical Interface
-1. Run the Gradio web interface:
-   ```bash
-   launch_gradio.bat
-   ```
-2. This will open a browser window with the Piper TTS Trainer interface
-3. Use the tabs to:
-   - **Preprocess Audio**: Upload and process your audio files
-   - **Configuration**: Set up your training parameters
-   - **Training**: Start and monitor the training process
-
-### OR: Manual Setup (Alternative to Graphical Interface)
-
-#### Step 2: Prepare Your Audio Files
-1. Create a folder named `wavs` in the project directory
-2. Add your audio files to the `wavs` folder
-   - Files must be in WAV format
-   - Use 16-bit audio
-   - Use mono channel (not stereo)
-   - Recommended sample rate: 22050 Hz or 16000 Hz
-   - Keep file names simple (e.g., `audio1.wav`, `audio2.wav`)
-
-### Step 3: Create Your Metadata File
-1. Create a file named `metadata.csv` in the project directory
-2. Add your transcriptions in this format:
-   ```
-   filename|transcription
-   audio1.wav|This is the first sentence
-   audio2.wav|This is the second sentence
-   ```
-   - Each line should contain the filename and its transcription, separated by a pipe (|)
-   - Make sure the transcriptions are accurate
-   - You can use a text editor or spreadsheet program to create this file
-
-### Step 4: Configure Your Training
-1. Open `config.json` in a text editor
-2. Set these important settings:
-   ```json
-   {
-     "language": "en-us",  // Change to your language code
-     "sample_rate": 22050, // Match your audio files' sample rate
-     "quality": "medium",  // Choose: "high", "medium", or "x-low"
-     "batch_size": 32,     // Adjust based on your computer's memory
-     "max_epochs": 1000    // Number of training cycles
-   }
-   ```
-
-### Step 5: Start Training
-1. Run the training script:
-   ```bash
-   python train.py --config config.json
-   ```
-2. The program will:
-   - Check your audio files
-   - Process the data
-   - Start training
-   - Save progress automatically
-
-### Step 6: Monitor Progress
-1. Open a new terminal
-2. Run TensorBoard to see training graphs:
-   ```bash
-   tensorboard --logdir output
-   ```
-3. Open your web browser and go to: `http://localhost:6006`
-
-### Step 7: Using Your Trained Model
-1. Once training is complete, your model will be in the `output` folder
-2. You can use this model with Piper TTS to generate speech
-
-## 📝 Important Notes
-
-- **Hardware Requirements:**
-  - A computer with at least 8GB RAM
-  - A GPU is recommended for faster training (CUDA compatible)
-  - Sufficient disk space for your dataset and model
-
-- **Training Time:**
-  - Small datasets (1-2 hours): 1-2 days
-  - Medium datasets (5-10 hours): 3-5 days
-  - Large datasets (20+ hours): 1-2 weeks
-
-- **Tips for Better Results:**
-  - Use high-quality audio recordings
-  - Ensure accurate transcriptions
-  - Include a variety of sentences
-  - More data usually means better results
-
-## 🆘 Troubleshooting
-
-If you encounter any issues:
-1. Check that your audio files are in the correct format
-2. Verify your metadata.csv format
-3. Make sure all paths in config.json are correct
-4. Check that you have enough disk space
-5. Ensure the virtual environment is properly activated
-6. Make sure all dependencies are installed correctly by running `pip list` in the activated environment
-
-## 📚 Additional Resources
+## Resources
 
 - [Piper TTS Documentation](https://github.com/rhasspy/piper)
-- [Audio Format Requirements](https://github.com/rhasspy/piper#audio-format)
-- [Training Tips and Best Practices](https://github.com/rhasspy/piper#training)
-
-## 🖥️ Using the Gradio Interface
-
-The Gradio interface provides a user-friendly way to manage your Piper TTS training:
-
-### Preprocessing Tab
-- Upload audio files directly through the interface
-- Specify input/output directories and metadata file
-- Preprocess audio files with a single click
-- See processing results in real-time
-
-### Configuration Tab
-- Edit all training and dataset parameters through a visual interface
-- Save configurations easily
-- Switch between training modes (train, continue, finetune)
-
-### Training Tab
-- Prepare your dataset with a single click
-- Start and monitor the training process
-- View training progress
-
-To launch:
-```bash
-launch_gradio.bat
-```
-
-## 🤝 Need Help?
-
-If you're stuck or have questions:
-1. Check the troubleshooting section above
-2. Review the error messages carefully
-3. Make sure you followed all steps correctly
-4. If still having issues, you can open an issue on GitHub 
+- [Piper Checkpoints on Hugging Face](https://huggingface.co/datasets/rhasspy/piper-checkpoints)

@@ -1,3 +1,8 @@
+# This file contains all dependencies for Piper TTS Trainer
+# IMPORTANT: Run setup.bat to install these dependencies in a virtual environment
+# Note: The Piper repository needs to be set up separately for training functionality
+
+# Core dependencies
 torch>=2.0.0
 torchvision>=0.15.0
 torchaudio>=2.0.0
@@ -16,5 +21,7 @@ soundfile==0.13.1
 cffi>=1.17.0
 pycparser>=2.22
 PyQt5>=5.15.0
+
+# UI dependencies
 gradio==4.8.0
 Pillow==10.2.0 
