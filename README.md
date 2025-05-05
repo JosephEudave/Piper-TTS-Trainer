@@ -80,12 +80,41 @@ For LJSpeech format (recommended):
 
 ## For Windows Users (Using WSL)
 
-If you're using Windows, you'll need to install and set up WSL (Windows Subsystem for Linux):
+If you're using Windows, we've made the WSL setup process easier with the included automation scripts:
 
-1. Install WSL by running `wsl --install` in PowerShell (admin)
-2. Install Ubuntu from the Microsoft Store
-3. Open Ubuntu and complete the setup
-4. Navigate to this project and follow the Linux instructions above
+1. **Run the WSL installation script**:
+   - Double-click `install_wsl.bat` in your Windows File Explorer
+   - This will install WSL and Ubuntu 22.04 if not already installed
+   - Follow any on-screen prompts and restart your computer if required
+
+2. **After WSL is installed and Ubuntu is set up**:
+   - Ubuntu should open automatically (if not, open it from the Start menu)
+   - Navigate to the project directory using:
+     ```
+     cd /mnt/c/Users/your-username/path/to/Piper-TTS-Trainer
+     ```
+     For example:
+     ```
+     cd /mnt/c/Users/josep/OneDrive/Documentos/GitHub/Piper-TTS-Trainer
+     ```
+
+3. **Run the setup script** to install all required dependencies:
+   ```
+   chmod +x setup.sh
+   ./setup.sh
+   ```
+   - This installs Python, required packages, and sets up the Piper TTS training environment
+
+4. **Launch the application**:
+   ```
+   ~/piper_tts_trainer/launch.sh
+   ```
+   - The web interface will be accessible at http://localhost:7860
+
+For manual WSL setup (if the script doesn't work):
+1. Install WSL by running `wsl --install -d Ubuntu-22.04` in PowerShell (admin)
+2. Complete the Ubuntu setup when prompted
+3. Open Ubuntu and follow the steps above from step 2
 
 ## Troubleshooting
 

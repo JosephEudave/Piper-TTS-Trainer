@@ -3,9 +3,22 @@
 # This script installs all dependencies for Piper TTS Training
 
 set -e  # Exit on error
-echo "=============================================="
-echo "Setting up Piper TTS Trainer..."
-echo "=============================================="
+echo "========================================================="
+echo "Piper TTS Trainer - Linux Setup Script"
+echo "========================================================="
+echo
+
+# Check if running in WSL
+if grep -q Microsoft /proc/version; then
+    echo "WSL environment detected."
+else
+    echo "This script is designed for WSL. It may work on native Linux but is not tested."
+    read -p "Continue anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
 
 # Create necessary directories
 PIPER_HOME="$HOME/piper_tts_trainer"
@@ -17,7 +30,7 @@ mkdir -p "$PIPER_HOME/models"
 # Update system and install required packages
 echo "Installing system dependencies..."
 sudo apt update
-sudo apt install -y python3-dev python3-pip python3.10-venv espeak-ng ffmpeg build-essential git wget
+sudo apt install -y python3 python3-pip python3-venv git build-essential
 
 # Navigate to project directory
 cd "$PIPER_HOME"
@@ -37,9 +50,12 @@ fi
 
 # Install Python dependencies
 echo "Installing Python packages..."
-pip install --upgrade pip wheel setuptools
-pip install gradio==4.8.0 requests packaging
-pip install onnxruntime tqdm matplotlib pandas
+pip install --upgrade pip
+pip install torch==2.0.1
+pip install pytorch-lightning==1.7.7
+pip install piper-phonemize
+pip install piper-train
+pip install gradio
 
 # Install piper_train
 echo "Installing piper_train..."
@@ -69,19 +85,23 @@ if [ ! -f "$PIPER_HOME/gradio_app.py" ]; then
 fi
 
 # Create launcher script
-cat > "$PIPER_HOME/launch.sh" << 'EOF'
+cat > "$PIPER_HOME/launch.sh" << 'EOL'
 #!/bin/bash
-# Launcher script for Piper TTS Trainer
+source "$HOME/piper_tts_trainer/.venv/bin/activate"
+cd "$(dirname "$0")"
+python3 -m piper_train.ui "$@"
+EOL
 
-cd "$HOME/piper_tts_trainer"
-source .venv/bin/activate
-python3 gradio_app.py
-EOF
 chmod +x "$PIPER_HOME/launch.sh"
 
-echo "=============================================="
-echo "Setup complete!"
-echo "=============================================="
-echo "To start the Piper TTS Trainer, run: ~/piper_tts_trainer/launch.sh"
-echo "Access the web interface at: http://localhost:7860"
-echo "==============================================" 
+echo
+echo "========================================================="
+echo "Setup Complete!"
+echo "========================================================="
+echo
+echo "To start the Piper TTS Trainer web interface:"
+echo "  ~/piper_tts_trainer/launch.sh"
+echo
+echo "The web interface will be accessible at: http://localhost:7860"
+echo
+echo "=========================================================" 
