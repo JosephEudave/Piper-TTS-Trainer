@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Literal
 
 @dataclass
@@ -32,8 +32,8 @@ class TrainingConfig:
 @dataclass
 class Config:
     """Main configuration class"""
-    dataset: DatasetConfig = DatasetConfig()
-    training: TrainingConfig = TrainingConfig()
+    dataset: DatasetConfig = field(default_factory=DatasetConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
 
 # Default configuration
 default_config = Config() 

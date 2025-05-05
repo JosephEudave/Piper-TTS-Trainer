@@ -1,6 +1,78 @@
-# Piper TTS Training
+# Piper TTS Trainer
 
-A simple and organized way to train your own Text-to-Speech (TTS) model using Piper. This guide will walk you through the entire process step by step.
+A user-friendly interface for training Piper Text-to-Speech models.
+
+## Quick Start
+
+1. Make sure you have Python 3.9 or higher installed
+2. Run `launch.bat` - this will set up the environment and start the application
+3. Access the web interface at http://127.0.0.1:7860
+
+## Installation
+
+### Automatic Setup (Recommended)
+
+Simply run the `setup.bat` script, which will:
+- Create a virtual environment (if not exists)
+- Install all required dependencies
+- Fix any common issues with package compatibility
+- Check for the piper_train module
+
+### Manual Setup
+
+If you prefer to set up manually:
+
+1. Create a virtual environment:
+   ```
+   python -m venv venv
+   ```
+
+2. Activate the environment:
+   ```
+   venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+## Usage
+
+### Launching the Application
+
+Run `launch.bat` to start the application. This will:
+- Check if the environment is properly set up
+- Start the Gradio web interface
+
+### Training Functionality
+
+**Note:** For training functionality, you need the `piper_train` module.
+See [PIPER_TRAIN_INFO.md](PIPER_TRAIN_INFO.md) for instructions on installing it.
+
+## Features
+
+- Preprocess audio files for TTS training
+- Configure model training parameters
+- Train TTS models with different quality settings
+- Easy-to-use web interface
+
+## Troubleshooting
+
+If you encounter any issues:
+
+1. Run `setup.bat` to ensure all dependencies are properly installed
+2. Check the console output for specific error messages
+3. For training-related issues, ensure the piper_train module is installed correctly
+
+## File Structure
+
+- `launch.bat` - Main launcher script
+- `setup.bat` - Comprehensive setup script
+- `requirements.txt` - List of required dependencies
+- `gradio_interface.py` - Main application interface
+- `config.py` - Configuration settings
+- `PIPER_TRAIN_INFO.md` - Information about the piper_train module
 
 ## 🚀 Quick Start Guide
 
@@ -16,7 +88,20 @@ A simple and organized way to train your own Text-to-Speech (TTS) model using Pi
    venv\Scripts\activate
    ```
 
-### Step 2: Prepare Your Audio Files
+### Step 2: Using the Graphical Interface
+1. Run the Gradio web interface:
+   ```bash
+   launch_gradio.bat
+   ```
+2. This will open a browser window with the Piper TTS Trainer interface
+3. Use the tabs to:
+   - **Preprocess Audio**: Upload and process your audio files
+   - **Configuration**: Set up your training parameters
+   - **Training**: Start and monitor the training process
+
+### OR: Manual Setup (Alternative to Graphical Interface)
+
+#### Step 2: Prepare Your Audio Files
 1. Create a folder named `wavs` in the project directory
 2. Add your audio files to the `wavs` folder
    - Files must be in WAV format
@@ -106,6 +191,31 @@ If you encounter any issues:
 - [Piper TTS Documentation](https://github.com/rhasspy/piper)
 - [Audio Format Requirements](https://github.com/rhasspy/piper#audio-format)
 - [Training Tips and Best Practices](https://github.com/rhasspy/piper#training)
+
+## 🖥️ Using the Gradio Interface
+
+The Gradio interface provides a user-friendly way to manage your Piper TTS training:
+
+### Preprocessing Tab
+- Upload audio files directly through the interface
+- Specify input/output directories and metadata file
+- Preprocess audio files with a single click
+- See processing results in real-time
+
+### Configuration Tab
+- Edit all training and dataset parameters through a visual interface
+- Save configurations easily
+- Switch between training modes (train, continue, finetune)
+
+### Training Tab
+- Prepare your dataset with a single click
+- Start and monitor the training process
+- View training progress
+
+To launch:
+```bash
+launch_gradio.bat
+```
 
 ## 🤝 Need Help?
 

@@ -1,0 +1,6 @@
+Collecting cffi
+  Using cached cffi-1.17.1-cp312-cp312-win_amd64.whl.metadata (1.6 kB)
+Requirement already satisfied: pycparser in c:\users\josep\onedrive\documentos\github\piper-tts-trainer\venv\lib\site-packages (from cffi) (2.22)
+Using cached cffi-1.17.1-cp312-cp312-win_amd64.whl (181 kB)
+Installing collected packages: cffi
+Successfully installed cffi-1.17.1
