@@ -16,9 +16,10 @@ DATASETS_DIR = os.path.join(PIPER_HOME, "datasets")
 TRAINING_DIR = os.path.join(PIPER_HOME, "training")
 CHECKPOINTS_DIR = os.path.join(PIPER_HOME, "checkpoints")
 MODELS_DIR = os.path.join(PIPER_HOME, "models")
+LOGS_DIR = os.path.join(PIPER_HOME, "logs")
 
 # Ensure directories exist
-for directory in [DATASETS_DIR, TRAINING_DIR, CHECKPOINTS_DIR, MODELS_DIR]:
+for directory in [DATASETS_DIR, TRAINING_DIR, CHECKPOINTS_DIR, MODELS_DIR, LOGS_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Language options for preprocessing
@@ -264,19 +265,19 @@ def create_interface():
                                              placeholder="Path to directory containing audio files (.wav, .mp3, .flac)")
                         transcription_file = gr.Textbox(label="Transcription File (Optional)", 
                                                      placeholder="Path to text file with format: filename|text")
-                        dataset_name = gr.Textbox(label="Dataset Name", 
+                        output_name = gr.Textbox(label="Output Dataset Name (optional)", 
                                                placeholder="Name for your dataset")
                         
                         prepare_btn = gr.Button("Prepare Dataset", variant="primary")
                     
                     with gr.Column(scale=2):
-                        prepare_status = gr.Textbox(label="Status", interactive=False)
+                        prepare_output = gr.Textbox(label="Output", interactive=False, lines=2)
                 
                 # Event handler
                 prepare_btn.click(
-                    prepare_dataset,
-                    inputs=[audio_dir, transcription_file, dataset_name],
-                    outputs=[prepare_status, None]
+                    fn=prepare_dataset,
+                    inputs=[audio_dir, transcription_file, output_name],
+                    outputs=[prepare_output, gr.State()]
                 )
             
             # Tab 2: Preprocess Dataset
