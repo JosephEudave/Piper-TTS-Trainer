@@ -2,7 +2,7 @@
     "dataset": {
         "wav_dir": "wavs",
         "metadata_file": "metadata.csv",
-        "language": "en-us",
+        "language": "es-mx",
         "sample_rate": 22050,
         "dataset_format": "ljspeech",
         "single_speaker": true,

@@ -9,7 +9,7 @@ from config import Config, default_config
 
 def setup_directories(config: Config) -> None:
     """Create necessary directories for training"""
-    os.makedirs(config.training.output_dir, exist_ok=True)
+    os.makedirs(config["training"]["output_dir"], exist_ok=True)
     os.makedirs("audio_cache", exist_ok=True)
 
 def prepare_dataset(config: Config) -> None:
@@ -40,42 +40,42 @@ def prepare_dataset(config: Config) -> None:
         single_speaker=config.dataset.single_speaker
     )
 
-def train_model(config: Config) -> None:
+def train_model(config: dict) -> None:
     """Train the model with the given configuration"""
     from piper_train import train
     
     # Prepare training arguments
     train_args = {
-        "dataset_dir": config.training.output_dir,
+        "dataset_dir": config["training"]["output_dir"],
         "accelerator": "gpu" if torch.cuda.is_available() else "cpu",
         "devices": 1,
-        "batch_size": config.training.batch_size,
-        "validation_split": config.training.validation_split,
-        "num_test_examples": config.training.num_test_examples,
-        "quality": config.training.quality,
-        "checkpoint_epochs": config.training.checkpoint_epochs,
-        "num_ckpt": config.training.num_ckpt,
-        "log_every_n_steps": config.training.log_every_n_steps,
-        "max_epochs": config.training.max_epochs,
+        "batch_size": config["training"]["batch_size"],
+        "validation_split": config["training"]["validation_split"],
+        "num_test_examples": config["training"]["num_test_examples"],
+        "quality": config["training"]["quality"],
+        "checkpoint_epochs": config["training"]["checkpoint_epochs"],
+        "num_ckpt": config["training"]["num_ckpt"],
+        "log_every_n_steps": config["training"]["log_every_n_steps"],
+        "max_epochs": config["training"]["max_epochs"],
         "precision": 32
     }
     
     # Add action-specific arguments
-    if config.training.action == "continue":
+    if config["training"]["action"] == "continue":
         # Find latest checkpoint
-        checkpoints = list(Path(config.training.output_dir).glob("lightning_logs/**/checkpoints/last.ckpt"))
+        checkpoints = list(Path(config["training"]["output_dir"]).glob("lightning_logs/**/checkpoints/last.ckpt"))
         if checkpoints:
             latest_checkpoint = max(checkpoints, key=lambda x: int(x.parent.parent.name.split("_")[1]))
             train_args["resume_from_checkpoint"] = str(latest_checkpoint)
         else:
             raise ValueError("No checkpoints found to continue training from")
-    elif config.training.action == "finetune":
-        if not config.training.pretrained_checkpoint:
+    elif config["training"]["action"] == "finetune":
+        if not config["training"]["pretrained_checkpoint"]:
             raise ValueError("Pretrained checkpoint path required for finetuning")
-        train_args["resume_from_checkpoint"] = config.training.pretrained_checkpoint
+        train_args["resume_from_checkpoint"] = config["training"]["pretrained_checkpoint"]
     
     # Add save_last if needed
-    if config.training.save_last:
+    if config["training"]["save_last"]:
         train_args["save_last"] = True
     
     # Start training
@@ -89,8 +89,7 @@ def main():
     # Load config
     if args.config:
         with open(args.config, "r") as f:
-            config_dict = json.load(f)
-        config = Config(**config_dict)
+            config = json.load(f)
     else:
         config = default_config
     
