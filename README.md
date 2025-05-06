@@ -1,133 +1,180 @@
-# Piper TTS Trainer
+![Piper logo](etc/logo.png)
 
-A simplified interface for training custom voice models with Piper TTS, built for Linux environments.
+A fast, local neural text to speech system that sounds great and is optimized for the Raspberry Pi 4.
+Piper is used in a [variety of projects](#people-using-piper).
 
-## Overview
+``` sh
+echo 'Welcome to the world of speech synthesis!' | \
+  ./piper --model en_US-lessac-medium.onnx --output_file welcome.wav
+```
 
-This project provides a user-friendly way to train custom text-to-speech voices using Piper TTS. It uses a Gradio web interface to make the complex process of voice training more accessible, running completely in Linux for maximum compatibility.
+[Listen to voice samples](https://rhasspy.github.io/piper-samples) and check out a [video tutorial by Thorsten Müller](https://youtu.be/rjq5eZoWWSo)
 
-## Requirements
+Voices are trained with [VITS](https://github.com/jaywalnut310/vits/) and exported to the [onnxruntime](https://onnxruntime.ai/).
 
-- Linux environment (Native Linux or WSL on Windows)
-- Python 3.8+
-- Internet connection (for downloading models and dependencies)
-- For GPU acceleration (recommended): NVIDIA GPU with CUDA support
+[![A library from the Open Home Foundation](https://www.openhomefoundation.org/badges/ohf-library.png)](https://www.openhomefoundation.org/)
 
-## Quick Start
+## Voices
 
-1. Clone this repository:
-   ```
-   git clone https://github.com/josepheudave/Piper-TTS-Trainer.git
-   cd Piper-TTS-Trainer
-   ```
+Our goal is to support Home Assistant and the [Year of Voice](https://www.home-assistant.io/blog/2022/12/20/year-of-voice/).
 
-2. Run the setup script:
-   ```
-   chmod +x setup.sh
-   ./setup.sh
-   ```
+[Download voices](VOICES.md) for the supported languages:
 
-3. Launch the Gradio interface:
-   ```
-   ~/piper_tts_trainer/launch.sh
-   ```
+* Arabic (ar_JO)
+* Catalan (ca_ES)
+* Czech (cs_CZ)
+* Welsh (cy_GB)
+* Danish (da_DK)
+* German (de_DE)
+* Greek (el_GR)
+* English (en_GB, en_US)
+* Spanish (es_ES, es_MX)
+* Finnish (fi_FI)
+* French (fr_FR)
+* Hungarian (hu_HU)
+* Icelandic (is_IS)
+* Italian (it_IT)
+* Georgian (ka_GE)
+* Kazakh (kk_KZ)
+* Luxembourgish (lb_LU)
+* Nepali (ne_NP)
+* Dutch (nl_BE, nl_NL)
+* Norwegian (no_NO)
+* Polish (pl_PL)
+* Portuguese (pt_BR, pt_PT)
+* Romanian (ro_RO)
+* Russian (ru_RU)
+* Serbian (sr_RS)
+* Swedish (sv_SE)
+* Swahili (sw_CD)
+* Turkish (tr_TR)
+* Ukrainian (uk_UA)
+* Vietnamese (vi_VN)
+* Chinese (zh_CN)
 
-4. Open your browser and navigate to: http://localhost:7860
+You will need two files per voice:
 
-## Features
+1. A `.onnx` model file, such as [`en_US-lessac-medium.onnx`](https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx)
+2. A `.onnx.json` config file, such as [`en_US-lessac-medium.onnx.json`](https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json)
 
-- **Pre-trained Models**: Browse and download checkpoint models from Hugging Face
-- **Dataset Configuration**: Preprocess your audio datasets for training
-- **Training**: Configure and run model training with GPU acceleration (if available)
-- **Export**: Convert trained models to ONNX format for use with Piper
+The `MODEL_CARD` file for each voice contains important licensing information. Piper is intended for text to speech research, and does not impose any additional restrictions on voice models. Some voices may have restrictive licenses, however, so please review them carefully!
 
-## Using the Interface
 
-### Pre-trained Models
+## Installation
 
-1. Select the language, region, voice, and quality
-2. Choose a checkpoint model
-3. Click "Download Selected Checkpoint"
+You can [run Piper with Python](#running-in-python) or download a binary release:
 
-### Dataset Configuration
+* [amd64](https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz) (64-bit desktop Linux)
+* [arm64](https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_arm64.tar.gz) (64-bit Raspberry Pi 4)
+* [armv7](https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_armv7.tar.gz) (32-bit Raspberry Pi 3/4)
 
-1. Prepare your dataset in LJSpeech, Mycroft, or VCTK format
-2. Enter the path to your dataset
-3. Configure dataset parameters
-4. Click "Preprocess Dataset"
+If you want to build from source, see the [Makefile](Makefile) and [C++ source](src/cpp).
+You must download and extract [piper-phonemize](https://github.com/rhasspy/piper-phonemize) to `lib/Linux-$(uname -m)/piper_phonemize` before building.
+For example, `lib/Linux-x86_64/piper_phonemize/lib/libpiper_phonemize.so` should exist for AMD/Intel machines (as well as everything else from `libpiper_phonemize-amd64.tar.gz`).
 
-### Training
 
-1. Select your preprocessed dataset
-2. Choose a checkpoint to start from
-3. Configure training parameters (batch size, epochs, etc.)
-4. Click "Start Training"
+## Usage
 
-### Export Model
+1. [Download a voice](#voices) and extract the `.onnx` and `.onnx.json` files
+2. Run the `piper` binary with text on standard input, `--model /path/to/your-voice.onnx`, and `--output_file output.wav`
 
-1. Enter the path to your trained checkpoint
-2. Set the export directory and model name
-3. Click "Export Model"
+For example:
 
-## Dataset Format
+``` sh
+echo 'Welcome to the world of speech synthesis!' | \
+  ./piper --model en_US-lessac-medium.onnx --output_file welcome.wav
+```
 
-For LJSpeech format (recommended):
-1. Create a folder with:
-   - A `metadata.csv` file with `|` as delimiter
-   - Format: `id|text`
-   - A `wav` directory containing audio files named `id.wav`
-2. Place your dataset in the ~/piper_tts_trainer/datasets directory
+For multi-speaker models, use `--speaker <number>` to change speakers (default: 0).
 
-## For Windows Users (Using WSL)
+See `piper --help` for more options.
 
-If you're using Windows, we've made the WSL setup process easier with the included automation scripts:
+### Streaming Audio
 
-1. **Run the WSL installation script**:
-   - Double-click `install_wsl.bat` in your Windows File Explorer
-   - This will install WSL and Ubuntu 22.04 if not already installed
-   - Follow any on-screen prompts and restart your computer if required
+Piper can stream raw audio to stdout as its produced:
 
-2. **After WSL is installed and Ubuntu is set up**:
-   - Ubuntu should open automatically (if not, open it from the Start menu)
-   - Navigate to the project directory using:
-     ```
-     cd /mnt/c/Users/your-username/path/to/Piper-TTS-Trainer
-     ```
-     For example:
-     ```
-     cd /mnt/c/Users/josep/OneDrive/Documentos/GitHub/Piper-TTS-Trainer
-     ```
+``` sh
+echo 'This sentence is spoken first. This sentence is synthesized while the first sentence is spoken.' | \
+  ./piper --model en_US-lessac-medium.onnx --output-raw | \
+  aplay -r 22050 -f S16_LE -t raw -
+```
 
-3. **Run the setup script** to install all required dependencies:
-   ```
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-   - This installs Python, required packages, and sets up the Piper TTS training environment
+This is **raw** audio and not a WAV file, so make sure your audio player is set to play 16-bit mono PCM samples at the correct sample rate for the voice.
 
-4. **Launch the application**:
-   ```
-   ~/piper_tts_trainer/launch.sh
-   ```
-   - The web interface will be accessible at http://localhost:7860
+### JSON Input
 
-For manual WSL setup (if the script doesn't work):
-1. Install WSL by running `wsl --install -d Ubuntu-22.04` in PowerShell (admin)
-2. Complete the Ubuntu setup when prompted
-3. Open Ubuntu and follow the steps above from step 2
+The `piper` executable can accept JSON input when using the `--json-input` flag. Each line of input must be a JSON object with `text` field. For example:
 
-## Troubleshooting
+``` json
+{ "text": "First sentence to speak." }
+{ "text": "Second sentence to speak." }
+```
 
-- If the interface doesn't open, check that the launch script is running correctly
-- For GPU training issues, verify that CUDA is properly installed
-- Dataset paths should be Linux paths (e.g., `/home/username/piper_tts_trainer/datasets/my-dataset`)
+Optional fields include:
 
-## Notes
+* `speaker` - string
+    * Name of the speaker to use from `speaker_id_map` in config (multi-speaker voices only)
+* `speaker_id` - number
+    * Id of speaker to use from 0 to number of speakers - 1 (multi-speaker voices only, overrides "speaker")
+* `output_file` - string
+    * Path to output WAV file
+    
+The following example writes two sentences with different speakers to different files:
 
-- Training can take several hours to days depending on your hardware and dataset size
-- GPU acceleration significantly improves training speed
+``` json
+{ "text": "First speaker.", "speaker_id": 0, "output_file": "/tmp/speaker_0.wav" }
+{ "text": "Second speaker.", "speaker_id": 1, "output_file": "/tmp/speaker_1.wav" }
+```
 
-## Resources
 
-- [Piper TTS Documentation](https://github.com/rhasspy/piper)
-- [Piper Checkpoints on Hugging Face](https://huggingface.co/datasets/rhasspy/piper-checkpoints)
+## People using Piper
+
+Piper has been used in the following projects/papers:
+
+* [Home Assistant](https://github.com/home-assistant/addons/blob/master/piper/README.md)
+* [Rhasspy 3](https://github.com/rhasspy/rhasspy3/)
+* [NVDA - NonVisual Desktop Access](https://www.nvaccess.org/post/in-process-8th-may-2023/#voices)
+* [Image Captioning for the Visually Impaired and Blind: A Recipe for Low-Resource Languages](https://www.techrxiv.org/articles/preprint/Image_Captioning_for_the_Visually_Impaired_and_Blind_A_Recipe_for_Low-Resource_Languages/22133894)
+* [Open Voice Operating System](https://github.com/OpenVoiceOS/ovos-tts-plugin-piper)
+* [JetsonGPT](https://github.com/shahizat/jetsonGPT)
+* [LocalAI](https://github.com/go-skynet/LocalAI)
+* [Lernstick EDU / EXAM: reading clipboard content aloud with language detection](https://lernstick.ch/)
+* [Natural Speech - A plugin for Runelite, an OSRS Client](https://github.com/phyce/rl-natural-speech)
+* [mintPiper](https://github.com/evuraan/mintPiper)
+* [Vim-Piper](https://github.com/wolandark/vim-piper)
+
+## Training
+
+See the [training guide](TRAINING.md) and the [source code](src/python).
+
+Pretrained checkpoints are available on [Hugging Face](https://huggingface.co/datasets/rhasspy/piper-checkpoints/tree/main)
+
+
+## Running in Python
+
+See [src/python_run](src/python_run)
+
+Install with `pip`:
+
+``` sh
+pip install piper-tts
+```
+
+and then run:
+
+``` sh
+echo 'Welcome to the world of speech synthesis!' | piper \
+  --model en_US-lessac-medium \
+  --output_file welcome.wav
+```
+
+This will automatically download [voice files](https://huggingface.co/rhasspy/piper-voices/tree/v1.0.0) the first time they're used. Use `--data-dir` and `--download-dir` to adjust where voices are found/downloaded.
+
+If you'd like to use a GPU, install the `onnxruntime-gpu` package:
+
+
+``` sh
+.venv/bin/pip3 install onnxruntime-gpu
+```
+
+and then run `piper` with the `--cuda` argument. You will need to have a functioning CUDA environment, such as what's available in [NVIDIA's PyTorch containers](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch).
