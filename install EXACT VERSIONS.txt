@@ -1,0 +1,26 @@
+Let's try using a newer version of ONNX Runtime that matches what piper-phonemize expects:
+
+cd ~/piper-phonemize && rm -rf onnxruntime-linux-x64-1.8.1* && wget https://github.com/microsoft/onnxruntime/releases/download/v1.14.1/onnxruntime-linux-x64-1.14.1.tgz && tar xf onnxruntime-linux-x64-1.14.1.tgz && cp -r onnxruntime-linux-x64-1.14.1/include/* lib/Linux-x86_64/onnxruntime/include/
+
+I see we need to copy the ONNX Runtime library file as well. Let's do that:
+
+cd ~/piper-phonemize && mkdir -p lib/Linux-x86_64/onnxruntime/lib && cp onnxruntime-linux-x64-1.14.1/lib/* lib/Linux-x86_64/onnxruntime/lib/
+
+cd ~/piper/src/python && source .venv/bin/activate && python3 -m pip install ~/piper-phonemize/
+
+
+
+libonnxruntime.so.1.14.1 onnxruntimev1.14.1 piper_phonemize1.1.0 torchmetrics=0.11.4  pip==23.3 torchmetrics=0.11.4 pytorch-lightning2.0.6
+
+Great! We have the correct version of the library (libonnxruntime.so.1.14.1). Now we need to make sure the system can find it. Let's add the library path to LD_LIBRARY_PATH:
+
+export LD_LIBRARY_PATH=~/piper-phonemize/lib/Linux-x86_64/onnxruntime/lib:$LD_LIBRARY_PATH && source .venv/bin/activate && python train.py --config config.json
+
+cd /mnt/c/Users/User/Documents/GitHub/Piper-TTS-Trainer && export LD_LIBRARY_PATH=~/piper-phonemize/lib/Linux-x86_64/onnxruntime/lib:$LD_LIBRARY_PATH && source .venv/bin/activate && python train.py --config config.json
+
+python3 train.py --config config.json
+
+source .venv/bin/activate
+
+if wsl and venv are active, procced with
+export LD_LIBRARY_PATH=~/piper-phonemize/lib/Linux-x86_64/onnxruntime/lib:$LD_LIBRARY_PATH && python train.py --config config.json

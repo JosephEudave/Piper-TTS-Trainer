@@ -1,12 +1,15 @@
 {
     "dataset": {
-        "wav_dir": "wavs",
-        "metadata_file": "metadata.csv",
-        "language": "es-mx",
+        "wav_dir": "/mnt/c/Users/User/Documents/GitHub/Piper-TTS-Trainer/wavs",
+        "metadata_file": "/mnt/c/Users/User/Documents/GitHub/Piper-TTS-Trainer/metadata.csv",
+        "language": "es",
         "sample_rate": 22050,
         "dataset_format": "ljspeech",
         "single_speaker": true,
-        "use_whisper": false
+        "use_whisper": false,
+        "max_workers": 4,
+        "espeak_data_path": "/mnt/c/Users/User/Documents/GitHub/Piper-TTS-Trainer/espeak-ng-data",
+        "ld_library_path": "/mnt/c/Users/User/Documents/GitHub/Piper-TTS-Trainer"
     },
     "training": {
         "model_name": "my_model",
