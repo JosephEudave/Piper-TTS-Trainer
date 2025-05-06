@@ -126,6 +126,10 @@ else
     python3 -m pip install torch torchvision torchaudio
 fi
 
+# Install Gradio and dependencies for the GUI interface
+echo "Installing Gradio for GUI interface..."
+python3 -m pip install gradio requests 
+
 bash build_monotonic_align.sh
 deactivate
 cd "$PIPER_HOME"
@@ -173,9 +177,19 @@ python3 -m piper_train \
     "$@"
 EOL
 
+# GUI Launcher script
+cat > "$PIPER_HOME/launch_trainer_gui.sh" << 'EOL'
+#!/bin/bash
+# Launch the Piper TTS Trainer GUI
+cd "$(dirname "$0")"
+source piper/src/python/.venv/bin/activate
+python3 piper_trainer_gui.py
+EOL
+
 # Make launchers executable
 chmod +x "$PIPER_HOME/launch_recording.sh"
 chmod +x "$PIPER_HOME/launch_training.sh"
+chmod +x "$PIPER_HOME/launch_trainer_gui.sh"
 
 # Create a README with instructions
 cat > "$PIPER_HOME/SETUP_INSTRUCTIONS.md" << 'EOL'
@@ -206,6 +220,18 @@ cat > "$PIPER_HOME/SETUP_INSTRUCTIONS.md" << 'EOL'
    ```bash
    ./launch_training.sh --dataset-dir ~/piper/my-training --resume_from_checkpoint checkpoints/epoch=2164-step=1355540.ckpt
    ```
+
+## GUI Interface
+
+For a more user-friendly experience, you can use the GUI interface:
+```bash
+./launch_trainer_gui.sh
+```
+
+This will open a web interface where you can:
+- Prepare your dataset
+- Preprocess your data
+- Train your model
 
 ## Important Notes
 
