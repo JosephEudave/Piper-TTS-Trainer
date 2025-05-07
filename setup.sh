@@ -1,6 +1,6 @@
 #!/bin/bash
 # Piper TTS Trainer - Setup Script
-# This script installs all dependencies for Piper TTS Training
+# This script installs all dependencies for Piper TTS Training based on the guide at https://ssamjh.nz/create-custom-piper-tts-voice/
 
 set -e  # Exit on error
 echo "========================================================="
@@ -51,7 +51,13 @@ sudo apt install -y python3-dev python3-venv espeak-ng ffmpeg build-essential gi
 # Additional build dependencies for piper_phonemize
 sudo apt install -y libespeak-ng-dev pkg-config cmake
 
-# Create and activate Python virtual environment
+# Clone Piper repository if it doesn't exist
+if [ ! -d "piper" ]; then
+    echo "Cloning Piper repository..."
+    git clone https://github.com/rhasspy/piper.git
+fi
+
+# Create and activate Python virtual environment in the root directory
 echo "Setting up Python environment..."
 if [ ! -d ".venv" ]; then
     python3 -m venv .venv
@@ -62,6 +68,7 @@ source .venv/bin/activate
 echo "Installing Python packages..."
 python3 -m pip install --upgrade pip
 python3 -m pip install --upgrade wheel setuptools
+python3 -m pip install pybind11  # Required for piper_phonemize
 
 # Install PyTorch based on GPU availability
 if [ "$GPU_AVAILABLE" = true ]; then
@@ -91,89 +98,28 @@ fi
 echo "Verifying PyTorch installation..."
 python3 -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if torch.cuda.is_available() else 'N/A'); print('GPU device count:', torch.cuda.device_count()); print('GPU device name:', torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else 'N/A')"
 
+# Install torchmetrics (specific version that works well with Piper)
+python3 -m pip install torchmetrics==0.11.4
+
 # Install all other dependencies from requirements.txt
 echo "Installing remaining dependencies from requirements.txt..."
-python3 -m pip install -r requirements.txt --no-deps
+python3 -m pip install -r requirements.txt
 
-# Clone Piper repository if it doesn't exist
-if [ ! -d "piper" ]; then
-    echo "Cloning Piper repository..."
-    git clone https://github.com/rhasspy/piper.git
-fi
-
-# Setup Piper
-cd piper/src/python/
+# Install Piper in development mode
+echo "Installing Piper in development mode..."
+cd "$PIPER_HOME/piper/src/python"
 python3 -m pip install -e .
+
+# Build monotonic align
+echo "Building monotonic align module..."
 bash build_monotonic_align.sh
 
-# Install piper_phonemize with simpler approach based on guide
-echo "Installing piper_phonemize dependencies..."
-sudo apt-get install -y libespeak-ng-dev
-
-# Go to src directory
-cd ..
-
-# Clone piper_phonemize if not exists
-if [ ! -d "piper_phonemize" ]; then
-    echo "Cloning piper_phonemize repository..."
-    git clone https://github.com/rhasspy/piper-phonemize.git piper_phonemize
-fi
-
-# Install piper_phonemize
-cd piper_phonemize
-echo "Installing piper_phonemize..."
-python3 -m pip install -e .
-
-# Verify installation
-if python3 -c "from piper_phonemize import phonemize_espeak; print('✅ piper_phonemize successfully imported')"; then
-    echo "✅ piper_phonemize installed successfully"
-else
-    echo "⚠️ Installation issue detected, trying alternative installation method..."
-    python3 -m pip install --no-build-isolation -e .
-    
-    # Check again
-    if python3 -c "from piper_phonemize import phonemize_espeak; print('✅ piper_phonemize successfully imported')"; then
-        echo "✅ piper_phonemize installed successfully with alternative method"
-    else
-        echo "❌ piper_phonemize installation failed"
-        echo "Please manually install using: pip install --no-build-isolation -e ."
-    fi
-fi
-
-# Return to python directory
-cd ../python
-
-# Ensure PYTHONPATH includes both piper_train and piper_phonemize
+# Set up PYTHONPATH for proper module discovery
 export PYTHONPATH="$PIPER_HOME/piper/src/python:$PIPER_HOME/piper/src:$PYTHONPATH"
 echo "PYTHONPATH set to: $PYTHONPATH"
 
-# Create an environment script for piper_phonemize
-echo "Creating environment script for piper_phonemize..."
-ENV_SCRIPT="$PIPER_HOME/set_piper_env.sh"
-
-cat > "$ENV_SCRIPT" << 'EOL'
-#!/bin/bash
-# Environment variables for Piper TTS
-
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PIPER_SRC="$SCRIPT_DIR/piper/src"
-PIPER_PYTHON="$PIPER_SRC/python"
-
-# Set PYTHONPATH to include Piper modules
-export PYTHONPATH="$PIPER_SRC:$PIPER_PYTHON:$PYTHONPATH"
-echo "PYTHONPATH set to: $PYTHONPATH"
-EOL
-
-chmod +x "$ENV_SCRIPT"
-echo "✅ Created environment script at $ENV_SCRIPT"
-echo "To use piper_phonemize, run:"
-echo "source $ENV_SCRIPT"
-
-# Return to main directory
-cd "$PIPER_HOME"
-
-# Create GUI launcher script
+# Create or update run_gui.sh script
+echo "Updating GUI launcher scripts..."
 cat > "$PIPER_HOME/run_gui.sh" << 'EOL'
 #!/bin/bash
 # Piper TTS Trainer - GUI Launcher
@@ -187,7 +133,6 @@ source "$SCRIPT_DIR/.venv/bin/activate"
 
 # Set PYTHONPATH to include Piper modules
 export PYTHONPATH="$SCRIPT_DIR/piper/src/python:$SCRIPT_DIR/piper/src:$PYTHONPATH"
-echo "PYTHONPATH set to: $PYTHONPATH"
 
 echo "Starting Piper TTS Trainer GUI..."
 echo "The interface will be available at: http://localhost:7860"
@@ -241,12 +186,6 @@ echo "To start the Piper TTS Trainer GUI:"
 echo "  Linux/WSL: ./run_gui.sh"
 echo "  Windows:   run_gui.bat"
 echo
-echo "For recording studio, install it separately with:"
-echo "  git clone https://github.com/rhasspy/piper-recording-studio.git"
-echo "  cd piper-recording-studio"
-echo "  python3 -m venv .venv"
-echo "  source .venv/bin/activate"
-echo "  pip install -r requirements.txt"
-echo "  pip install -r requirements_export.txt"
+echo "All functionality is accessible through the GUI interface."
 echo
 echo "=========================================================" 

@@ -10,7 +10,6 @@ source "$SCRIPT_DIR/.venv/bin/activate"
 
 # Set PYTHONPATH to include Piper modules
 export PYTHONPATH="$SCRIPT_DIR/piper/src/python:$SCRIPT_DIR/piper/src:$PYTHONPATH"
-echo "PYTHONPATH set to: $PYTHONPATH"
 
 echo "Starting Piper TTS Trainer GUI..."
 echo "The interface will be available at: http://localhost:7860"

@@ -58,9 +58,9 @@ LANGUAGES = {
 # Get Python executable with venv
 def get_piper_python():
     if os.name == 'nt':  # Windows
-        venv_python = os.path.join(PIPER_HOME, "piper\\src\\python\\.venv\\Scripts\\python.exe")
+        venv_python = os.path.join(PIPER_HOME, ".venv\\Scripts\\python.exe")
     else:  # Linux/Mac
-        venv_python = os.path.join(PIPER_HOME, "piper/src/python/.venv/bin/python3")
+        venv_python = os.path.join(PIPER_HOME, ".venv/bin/python3")
     
     # Check if the virtual environment exists
     if not os.path.exists(venv_python):
@@ -72,9 +72,13 @@ def get_piper_python():
 
 # Get command to run Piper modules correctly
 def get_piper_command(module_name):
-    """Create a command that ensures proper Python path for Piper modules"""
+    """Create a command that runs the module in the Python virtual environment"""
     python_exe = get_piper_python()
     
+    # Set up environment with PYTHONPATH to find Piper modules
+    env = os.environ.copy()
+    
+    # Create paths to Piper modules
     if os.name == 'nt':  # Windows
         piper_src = os.path.join(PIPER_HOME, "piper\\src\\python")
         piper_parent = os.path.join(PIPER_HOME, "piper\\src")
@@ -88,11 +92,7 @@ def get_piper_command(module_name):
     piper_src = convert_path_if_needed(piper_src)
     piper_parent = convert_path_if_needed(piper_parent)
     
-    # Create environment with PYTHONPATH set to include piper source
-    env = os.environ.copy()
-    
-    # Add piper source and parent dir to PYTHONPATH
-    # This ensures both piper_train and piper_phonemize can be found
+    # Add piper paths to PYTHONPATH
     python_paths = [piper_src, piper_parent]
     
     if 'PYTHONPATH' in env and env['PYTHONPATH']:
@@ -102,16 +102,11 @@ def get_piper_command(module_name):
     
     # Return the command and environment
     if module_name.startswith("piper_train."):
-        module_parts = module_name.split('.')
-        script_path = os.path.join(piper_src, *module_parts[:-1], f"{module_parts[-1]}.py")
-        script_path = convert_path_if_needed(script_path)
-        
-        return [python_exe, script_path], env
+        # For piper_train modules, use -m flag for proper module resolution
+        return [python_exe, "-m", module_name], env
     else:
-        # For modules that aren't part of piper_train (which we don't currently use)
-        script_path = os.path.join(piper_src, module_name.replace('.', '/') + '.py')
-        script_path = convert_path_if_needed(script_path)
-        return [python_exe, script_path], env
+        # For other modules
+        return [python_exe, "-m", module_name], env
 
 # Audio normalization functions
 def normalize_audio_file(
