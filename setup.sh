@@ -48,6 +48,8 @@ fi
 echo "Installing system dependencies..."
 sudo apt update
 sudo apt install -y python3-dev python3-venv espeak-ng ffmpeg build-essential git
+# Additional build dependencies for piper_phonemize
+sudo apt install -y libespeak-ng-dev pkg-config cmake
 
 # Create and activate Python virtual environment
 echo "Setting up Python environment..."
@@ -104,6 +106,70 @@ cd piper/src/python/
 python3 -m pip install -e .
 bash build_monotonic_align.sh
 
+# Install piper_phonemize with simpler approach based on guide
+echo "Installing piper_phonemize dependencies..."
+sudo apt-get install -y libespeak-ng-dev
+
+# Go to src directory
+cd ..
+
+# Clone piper_phonemize if not exists
+if [ ! -d "piper_phonemize" ]; then
+    echo "Cloning piper_phonemize repository..."
+    git clone https://github.com/rhasspy/piper-phonemize.git piper_phonemize
+fi
+
+# Install piper_phonemize
+cd piper_phonemize
+echo "Installing piper_phonemize..."
+python3 -m pip install -e .
+
+# Verify installation
+if python3 -c "from piper_phonemize import phonemize_espeak; print('✅ piper_phonemize successfully imported')"; then
+    echo "✅ piper_phonemize installed successfully"
+else
+    echo "⚠️ Installation issue detected, trying alternative installation method..."
+    python3 -m pip install --no-build-isolation -e .
+    
+    # Check again
+    if python3 -c "from piper_phonemize import phonemize_espeak; print('✅ piper_phonemize successfully imported')"; then
+        echo "✅ piper_phonemize installed successfully with alternative method"
+    else
+        echo "❌ piper_phonemize installation failed"
+        echo "Please manually install using: pip install --no-build-isolation -e ."
+    fi
+fi
+
+# Return to python directory
+cd ../python
+
+# Ensure PYTHONPATH includes both piper_train and piper_phonemize
+export PYTHONPATH="$PIPER_HOME/piper/src/python:$PIPER_HOME/piper/src:$PYTHONPATH"
+echo "PYTHONPATH set to: $PYTHONPATH"
+
+# Create an environment script for piper_phonemize
+echo "Creating environment script for piper_phonemize..."
+ENV_SCRIPT="$PIPER_HOME/set_piper_env.sh"
+
+cat > "$ENV_SCRIPT" << 'EOL'
+#!/bin/bash
+# Environment variables for Piper TTS
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PIPER_SRC="$SCRIPT_DIR/piper/src"
+PIPER_PYTHON="$PIPER_SRC/python"
+
+# Set PYTHONPATH to include Piper modules
+export PYTHONPATH="$PIPER_SRC:$PIPER_PYTHON:$PYTHONPATH"
+echo "PYTHONPATH set to: $PYTHONPATH"
+EOL
+
+chmod +x "$ENV_SCRIPT"
+echo "✅ Created environment script at $ENV_SCRIPT"
+echo "To use piper_phonemize, run:"
+echo "source $ENV_SCRIPT"
+
 # Return to main directory
 cd "$PIPER_HOME"
 
@@ -118,6 +184,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Activate the virtual environment
 source "$SCRIPT_DIR/.venv/bin/activate"
+
+# Set PYTHONPATH to include Piper modules
+export PYTHONPATH="$SCRIPT_DIR/piper/src/python:$SCRIPT_DIR/piper/src:$PYTHONPATH"
+echo "PYTHONPATH set to: $PYTHONPATH"
 
 echo "Starting Piper TTS Trainer GUI..."
 echo "The interface will be available at: http://localhost:7860"
@@ -140,6 +210,11 @@ echo Starting Piper TTS Trainer GUI...
 echo The interface will be available at: http://localhost:7860
 echo Press Ctrl+C to stop the server
 echo.
+
+REM Set PYTHONPATH to include Piper modules
+set "SCRIPT_DIR=%~dp0"
+set "PYTHONPATH=%SCRIPT_DIR%piper\src\python;%SCRIPT_DIR%piper\src;%PYTHONPATH%"
+echo PYTHONPATH set to: %PYTHONPATH%
 
 REM Activate the virtual environment and run the GUI script
 call ".venv\Scripts\activate.bat" && python piper_trainer_gui.py

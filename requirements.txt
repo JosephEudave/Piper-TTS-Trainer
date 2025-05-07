@@ -44,7 +44,6 @@ numpy==1.26.4
 onnxruntime==1.21.1
 packaging==25.0
 pillow==11.0.0
-piper_phonemize==1.1.0
 platformdirs==4.3.7
 pooch==1.8.2
 propcache==0.3.1

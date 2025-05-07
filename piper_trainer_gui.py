@@ -58,9 +58,60 @@ LANGUAGES = {
 # Get Python executable with venv
 def get_piper_python():
     if os.name == 'nt':  # Windows
-        return os.path.join(PIPER_HOME, "piper\\src\\python\\.venv\\Scripts\\python.exe")
+        venv_python = os.path.join(PIPER_HOME, "piper\\src\\python\\.venv\\Scripts\\python.exe")
     else:  # Linux/Mac
-        return os.path.join(PIPER_HOME, "piper/src/python/.venv/bin/python3")
+        venv_python = os.path.join(PIPER_HOME, "piper/src/python/.venv/bin/python3")
+    
+    # Check if the virtual environment exists
+    if not os.path.exists(venv_python):
+        print(f"Warning: Python virtual environment not found at {venv_python}")
+        # Fall back to system Python if venv not found
+        return "python" if os.name == 'nt' else "python3"
+        
+    return venv_python
+
+# Get command to run Piper modules correctly
+def get_piper_command(module_name):
+    """Create a command that ensures proper Python path for Piper modules"""
+    python_exe = get_piper_python()
+    
+    if os.name == 'nt':  # Windows
+        piper_src = os.path.join(PIPER_HOME, "piper\\src\\python")
+        piper_parent = os.path.join(PIPER_HOME, "piper\\src")
+        path_sep = ";"
+    else:  # Linux/Mac
+        piper_src = os.path.join(PIPER_HOME, "piper/src/python")
+        piper_parent = os.path.join(PIPER_HOME, "piper/src")
+        path_sep = ":"
+    
+    # Convert paths if needed
+    piper_src = convert_path_if_needed(piper_src)
+    piper_parent = convert_path_if_needed(piper_parent)
+    
+    # Create environment with PYTHONPATH set to include piper source
+    env = os.environ.copy()
+    
+    # Add piper source and parent dir to PYTHONPATH
+    # This ensures both piper_train and piper_phonemize can be found
+    python_paths = [piper_src, piper_parent]
+    
+    if 'PYTHONPATH' in env and env['PYTHONPATH']:
+        python_paths.append(env['PYTHONPATH'])
+    
+    env['PYTHONPATH'] = path_sep.join(python_paths)
+    
+    # Return the command and environment
+    if module_name.startswith("piper_train."):
+        module_parts = module_name.split('.')
+        script_path = os.path.join(piper_src, *module_parts[:-1], f"{module_parts[-1]}.py")
+        script_path = convert_path_if_needed(script_path)
+        
+        return [python_exe, script_path], env
+    else:
+        # For modules that aren't part of piper_train (which we don't currently use)
+        script_path = os.path.join(piper_src, module_name.replace('.', '/') + '.py')
+        script_path = convert_path_if_needed(script_path)
+        return [python_exe, script_path], env
 
 # Audio normalization functions
 def normalize_audio_file(
@@ -222,36 +273,52 @@ def prepare_dataset(audio_dir, transcription_file=None, output_name=None):
 # Preprocess dataset function
 def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeech", single_speaker=True):
     try:
+        # First, check that all required modules are available
+        module_check = check_piper_modules()
+        
+        # Check piper_train
+        if not module_check.get("piper_train", False) or not module_check.get("preprocess.py", False):
+            return False, None, f"Error: piper_train module not found at {module_check.get('piper_train_path', 'unknown path')}"
+        
+        # Check piper_phonemize
+        if not module_check.get("piper_phonemize", False):
+            return False, None, f"Error: piper_phonemize module not found at {module_check.get('piper_phonemize_path', 'unknown path')}"
+        
         # Convert path if needed
         dataset_dir = convert_path_if_needed(dataset_dir)
         
         # Get dataset name from directory
         dataset_name = os.path.basename(os.path.normpath(dataset_dir))
         output_dir = os.path.join(TRAINING_DIR, dataset_name)
+        output_dir = convert_path_if_needed(output_dir)
         
         # Build command
-        python_exe = get_piper_python()
-        cmd = [
-            python_exe, 
-            "-m", "piper_train.preprocess",
+        cmd, env = get_piper_command("piper_train.preprocess")
+        
+        # Add preprocessing arguments
+        cmd.extend([
             "--language", language,
             "--input-dir", dataset_dir,
             "--output-dir", output_dir,
             "--dataset-format", format,
             "--sample-rate", str(sample_rate)
-        ]
+        ])
         
         if single_speaker:
             cmd.append("--single-speaker")
         
         # Run preprocessing
-        process = subprocess.run(cmd, capture_output=True, text=True)
+        process = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
         if process.returncode == 0:
             log_output = process.stdout
             return True, output_dir, log_output
         else:
-            return False, None, process.stderr
+            error_output = process.stderr
+            
+            # Debug output to help identify the issue
+            debug_info = f"Command: {' '.join(cmd)}\nReturn code: {process.returncode}\nPYTHONPATH: {env.get('PYTHONPATH', 'Not set')}\n"
+            return False, None, debug_info + error_output
     
     except Exception as e:
         return False, None, str(e)
@@ -260,15 +327,19 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
 def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000, 
                quality="medium", precision="32"):
     try:
-        python_exe = get_piper_python()
+        # Convert paths if needed
+        training_dir = convert_path_if_needed(training_dir)
+        if checkpoint_path:
+            checkpoint_path = convert_path_if_needed(checkpoint_path)
         
         # Check for GPU
         gpu_available = torch.cuda.is_available()
         
         # Build command
-        cmd = [
-            python_exe,
-            "-m", "piper_train",
+        cmd, env = get_piper_command("piper_train")
+        
+        # Add training arguments
+        cmd.extend([
             "--dataset-dir", training_dir,
             "--batch-size", str(batch_size),
             "--max_epochs", str(epochs),
@@ -276,7 +347,7 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
             "--validation-split", "0.0",
             "--num-test-examples", "0",
             "--checkpoint-epochs", "1"
-        ]
+        ])
         
         # Add quality if specified
         if quality:
@@ -300,6 +371,10 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
             
             cmd.extend(["--accelerator", "cpu"])
         
+        # Show command being executed for debugging
+        yield f"Executing: {' '.join(cmd)}"
+        yield f"PYTHONPATH: {env.get('PYTHONPATH', 'Not set')}"
+        
         # Start training as a process
         process = subprocess.Popen(
             cmd,
@@ -307,7 +382,8 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            env=env
         )
         
         # Stream the output
@@ -333,26 +409,21 @@ def export_model_to_onnx(checkpoint_path, output_path, streaming=False):
         checkpoint_path = convert_path_if_needed(checkpoint_path)
         output_path = convert_path_if_needed(output_path)
         
-        python_exe = get_piper_python()
-        
         # Determine which exporter to use
         export_module = "piper_train.export_onnx_streaming" if streaming else "piper_train.export_onnx"
         
         # Build command
-        cmd = [
-            python_exe,
-            "-m", export_module,
-            checkpoint_path,
-            output_path
-        ]
+        cmd, env = get_piper_command(export_module)
+        cmd.extend([checkpoint_path, output_path])
         
         # Run export process
-        process = subprocess.run(cmd, capture_output=True, text=True)
+        process = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
         if process.returncode == 0:
             return True, f"Successfully exported model to {output_path}", process.stdout
         else:
-            return False, f"Failed to export model. See logs for details.", process.stderr
+            debug_info = f"Command: {' '.join(cmd)}\nReturn code: {process.returncode}\nPYTHONPATH: {env.get('PYTHONPATH', 'Not set')}\n"
+            return False, f"Failed to export model. See logs for details.", debug_info + process.stderr
     
     except Exception as e:
         return False, f"Error exporting model: {str(e)}", str(e)
@@ -436,6 +507,42 @@ def download_checkpoint():
             return f"Checkpoint already exists at {output_path}"
     except Exception as e:
         return f"Error downloading checkpoint: {str(e)}"
+
+# Add function to check the piper directory structure
+def check_piper_modules():
+    """Check that all required Piper modules can be found"""
+    try:
+        # Define critical paths
+        if os.name == 'nt':  # Windows
+            piper_train_path = os.path.join(PIPER_HOME, "piper\\src\\python\\piper_train")
+            piper_phonemize_path = os.path.join(PIPER_HOME, "piper\\src\\piper_phonemize")
+        else:  # Linux/Mac
+            piper_train_path = os.path.join(PIPER_HOME, "piper/src/python/piper_train")
+            piper_phonemize_path = os.path.join(PIPER_HOME, "piper/src/piper_phonemize")
+        
+        # Convert paths if needed
+        piper_train_path = convert_path_if_needed(piper_train_path)
+        piper_phonemize_path = convert_path_if_needed(piper_phonemize_path)
+        
+        # Check if paths exist
+        train_exists = os.path.exists(piper_train_path)
+        phonemize_exists = os.path.exists(piper_phonemize_path)
+        
+        # Check for key files
+        preprocess_path = os.path.join(piper_train_path, "preprocess.py")
+        preprocess_exists = os.path.exists(preprocess_path)
+        
+        result = {
+            "piper_train": train_exists,
+            "piper_phonemize": phonemize_exists,
+            "preprocess.py": preprocess_exists,
+            "piper_train_path": piper_train_path,
+            "piper_phonemize_path": piper_phonemize_path
+        }
+        
+        return result
+    except Exception as e:
+        return {"error": str(e)}
 
 # Create the Gradio interface
 def create_interface():
@@ -614,14 +721,26 @@ def create_interface():
                     else:
                         dataset_path = os.path.join(NORMALIZED_DIR, dataset)
                     
+                    # Check modules first
+                    module_info = check_piper_modules()
+                    module_status = ["Piper module status:"]
+                    for key, value in module_info.items():
+                        if key.endswith("_path"):
+                            module_status.append(f"- {key}: {value}")
+                        else:
+                            module_status.append(f"- {key}: {'Found' if value else 'Missing'}")
+                    
+                    module_text = "\n".join(module_status)
+                    
+                    # Run preprocessing
                     success, output_dir, log = preprocess_dataset(
                         dataset_path, language, sample_rate, format, single_speaker
                     )
                     
                     if success:
-                        return f"Preprocessing completed successfully. Output in {output_dir}", log
+                        return f"Preprocessing completed successfully. Output in {output_dir}", module_text + "\n\n" + log
                     else:
-                        return f"Preprocessing failed. See log for details.", log
+                        return f"Preprocessing failed. See log for details.", module_text + "\n\n" + log
                 
                 preprocess_btn.click(
                     run_preprocess,
