@@ -20,20 +20,34 @@ else
     fi
 fi
 
+# Use current directory instead of home directory
+PIPER_HOME="$(pwd)"
+echo "Using directory: $PIPER_HOME"
+
 # Create necessary directories
-PIPER_HOME="$HOME/piper_tts_trainer"
 mkdir -p "$PIPER_HOME/checkpoints"
 mkdir -p "$PIPER_HOME/datasets"
 mkdir -p "$PIPER_HOME/training"
 mkdir -p "$PIPER_HOME/models"
+mkdir -p "$PIPER_HOME/normalized_wavs"
+
+# Check for NVIDIA GPU
+echo "Checking for NVIDIA GPU..."
+if command -v nvidia-smi &> /dev/null; then
+    echo "NVIDIA GPU detected. Will configure for GPU training."
+    GPU_AVAILABLE=true
+    # Get CUDA version
+    CUDA_VERSION=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | cut -d'.' -f1,2 | head -n 1)
+    echo "Detected CUDA driver version: $CUDA_VERSION"
+else
+    echo "No NVIDIA GPU detected. Will configure for CPU training (slower)."
+    GPU_AVAILABLE=false
+fi
 
 # Update system and install required packages
 echo "Installing system dependencies..."
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv git build-essential
-
-# Navigate to project directory
-cd "$PIPER_HOME"
+sudo apt install -y python3-dev python3-venv espeak-ng ffmpeg build-essential git
 
 # Create and activate Python virtual environment
 echo "Setting up Python environment..."
@@ -42,66 +56,122 @@ if [ ! -d ".venv" ]; then
 fi
 source .venv/bin/activate
 
+# Install Python dependencies
+echo "Installing Python packages..."
+python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade wheel setuptools
+
+# Install PyTorch based on GPU availability
+if [ "$GPU_AVAILABLE" = true ]; then
+    echo "Installing PyTorch with CUDA support..."
+    
+    # Choose PyTorch version based on CUDA version
+    if [[ $(echo "$CUDA_VERSION >= 12.0" | bc -l) -eq 1 ]]; then
+        echo "Installing PyTorch nightly build with CUDA 12.8 support..."
+        python3 -m pip install --pre torch==2.8.0.dev20250325+cu128 torchvision==0.22.0.dev20250325+cu128 torchaudio==2.6.0.dev20250325+cu128 --index-url https://download.pytorch.org/whl/nightly/cu128
+    elif [[ $(echo "$CUDA_VERSION >= 11.8" | bc -l) -eq 1 ]]; then
+        echo "Installing PyTorch with CUDA 11.8 support..."
+        python3 -m pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+    elif [[ $(echo "$CUDA_VERSION >= 11.6" | bc -l) -eq 1 ]]; then
+        echo "Installing PyTorch with CUDA 11.6 support..."
+        python3 -m pip install torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 --index-url https://download.pytorch.org/whl/cu116
+    else
+        echo "Warning: Your CUDA version ($CUDA_VERSION) may not be compatible with current PyTorch versions."
+        echo "Attempting to install latest PyTorch with CUDA support..."
+        python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+    fi
+else
+    echo "Installing PyTorch for CPU (training will be slower)..."
+    python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+fi
+
+# Verify PyTorch installation
+echo "Verifying PyTorch installation..."
+python3 -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if torch.cuda.is_available() else 'N/A'); print('GPU device count:', torch.cuda.device_count()); print('GPU device name:', torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else 'N/A')"
+
+# Install all other dependencies from requirements.txt
+echo "Installing remaining dependencies from requirements.txt..."
+python3 -m pip install -r requirements.txt --no-deps
+
 # Clone Piper repository if it doesn't exist
 if [ ! -d "piper" ]; then
     echo "Cloning Piper repository..."
     git clone https://github.com/rhasspy/piper.git
 fi
 
-# Install Python dependencies
-echo "Installing Python packages..."
-pip install --upgrade pip
-pip install torch>=2.2.0
-pip install pytorch-lightning==2.5.1.post0
-pip install piper-phonemize
-pip install piper-train
-pip install gradio
-
-# Install piper_train
-echo "Installing piper_train..."
-cd "$PIPER_HOME/piper/src/python"
-pip install -e .
-pip install torchmetrics==0.11.4
-
-# Build monotonic_align
-echo "Building monotonic_align..."
+# Setup Piper
+cd piper/src/python/
+python3 -m pip install -e .
 bash build_monotonic_align.sh
 
-# Install PyTorch with CUDA if available
-echo "Checking for CUDA support..."
-if command -v nvidia-smi &> /dev/null; then
-    echo "NVIDIA GPU detected. Installing PyTorch with CUDA support..."
-    pip install torch==2.1.0+cu118 torchaudio==2.1.0+cu118 -f https://download.pytorch.org/whl/torch_stable.html
-else
-    echo "No NVIDIA GPU detected. Installing CPU-only PyTorch..."
-    pip install torch torchaudio
-fi
+# Return to main directory
+cd "$PIPER_HOME"
 
-# Copy the Gradio app if it doesn't exist yet
-if [ ! -f "$PIPER_HOME/gradio_app.py" ]; then
-    echo "Creating Gradio web interface..."
-    cd "$PIPER_HOME"
-    # The gradio_app.py will be created separately
-fi
-
-# Create launcher script
-cat > "$PIPER_HOME/launch.sh" << 'EOL'
+# Create GUI launcher script
+cat > "$PIPER_HOME/run_gui.sh" << 'EOL'
 #!/bin/bash
-source "$HOME/piper_tts_trainer/.venv/bin/activate"
-cd "$(dirname "$0")"
-python3 -m piper_train.ui "$@"
+# Piper TTS Trainer - GUI Launcher
+# This script activates the virtual environment and launches the Piper TTS Trainer GUI
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Activate the virtual environment
+source "$SCRIPT_DIR/.venv/bin/activate"
+
+echo "Starting Piper TTS Trainer GUI..."
+echo "The interface will be available at: http://localhost:7860"
+echo "Press Ctrl+C to stop the server"
+echo
+
+# Run the GUI script
+python "$SCRIPT_DIR/piper_trainer_gui.py"
 EOL
 
-chmod +x "$PIPER_HOME/launch.sh"
+chmod +x "$PIPER_HOME/run_gui.sh"
+
+# Create Windows batch launcher
+cat > "$PIPER_HOME/run_gui.bat" << 'EOL'
+@echo off
+REM Piper TTS Trainer - GUI Launcher for Windows
+REM This script activates the virtual environment and launches the Piper TTS Trainer GUI
+
+echo Starting Piper TTS Trainer GUI...
+echo The interface will be available at: http://localhost:7860
+echo Press Ctrl+C to stop the server
+echo.
+
+REM Activate the virtual environment and run the GUI script
+call ".venv\Scripts\activate.bat" && python piper_trainer_gui.py
+
+REM If we get here, the GUI has been closed
+echo.
+echo GUI server has stopped.
+pause
+EOL
 
 echo
 echo "========================================================="
 echo "Setup Complete!"
 echo "========================================================="
 echo
-echo "To start the Piper TTS Trainer web interface:"
-echo "  ~/piper_tts_trainer/launch.sh"
+if [ "$GPU_AVAILABLE" = true ]; then
+    echo "GPU training is enabled for faster voice training."
+else
+    echo "WARNING: No GPU detected. Training will use CPU and be slow."
+    echo "For optimal performance, install on a system with NVIDIA GPU."
+fi
 echo
-echo "The web interface will be accessible at: http://localhost:7860"
+echo "To start the Piper TTS Trainer GUI:"
+echo "  Linux/WSL: ./run_gui.sh"
+echo "  Windows:   run_gui.bat"
+echo
+echo "For recording studio, install it separately with:"
+echo "  git clone https://github.com/rhasspy/piper-recording-studio.git"
+echo "  cd piper-recording-studio"
+echo "  python3 -m venv .venv"
+echo "  source .venv/bin/activate"
+echo "  pip install -r requirements.txt"
+echo "  pip install -r requirements_export.txt"
 echo
 echo "=========================================================" 

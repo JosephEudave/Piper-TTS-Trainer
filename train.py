@@ -64,9 +64,12 @@ def train_model(config: dict) -> None:
     from pytorch_lightning import Trainer
     from pytorch_lightning.callbacks import ModelCheckpoint
     
+    # Check if CPU mode is forced
+    use_cpu = config["training"].get("use_cpu", False)
+    
     # Set up training arguments
     trainer_kwargs = {
-        "accelerator": "gpu" if torch.cuda.is_available() else "cpu",
+        "accelerator": "cpu" if use_cpu else ("gpu" if torch.cuda.is_available() else "cpu"),
         "devices": 1,
         "max_epochs": config["training"]["max_epochs"],
         "default_root_dir": config["training"]["output_dir"]

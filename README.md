@@ -178,3 +178,152 @@ If you'd like to use a GPU, install the `onnxruntime-gpu` package:
 ```
 
 and then run `piper` with the `--cuda` argument. You will need to have a functioning CUDA environment, such as what's available in [NVIDIA's PyTorch containers](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch).
+
+# Piper TTS Trainer
+
+A complete end-to-end solution for training custom text-to-speech (TTS) voices using the Piper neural TTS system. This project provides a user-friendly graphical interface for dataset preparation, audio normalization, preprocessing, training, and model export.
+
+## Important: Linux Required
+
+**This project only runs on Linux-based operating systems.** Windows users must use Windows Subsystem for Linux (WSL) to run Piper TTS Trainer.
+
+## Features
+
+- **User-friendly GUI**: Complete graphical interface for all stages of voice creation
+- **Dataset Preparation**: Convert raw audio files into properly formatted datasets
+- **Audio Normalization**: Fix clipping issues to prevent "audio amplitude out of range" warnings
+- **Preprocessing**: Convert datasets into training-ready format
+- **Model Training**: Train your TTS model with GPU acceleration
+- **Model Export**: Convert trained models to ONNX format for inference
+
+## Installation
+
+### Windows Users (WSL Required)
+
+1. **Install WSL**:
+   - Run the `install_wsl.bat` script as administrator
+   - Your computer will restart after the installation completes
+   - After restart, Ubuntu will continue setup and prompt you to create a username and password
+
+2. **After WSL Setup**:
+   - Open Ubuntu from the Start menu
+   - Navigate to your Piper TTS Trainer directory:
+   ```bash
+   cd /mnt/c/path/to/Piper-TTS-Trainer
+   ```
+   - Run the setup script:
+   ```bash
+   ./setup.sh
+   ```
+
+### Linux Users (Native)
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/Piper-TTS-Trainer.git
+   cd Piper-TTS-Trainer
+   ```
+
+2. **Run the setup script**:
+   ```bash
+   chmod +x setup.sh
+   ./setup.sh
+   ```
+
+## Running the Application
+
+### Start the GUI
+
+```bash
+# Linux/WSL
+./run_gui.sh
+
+# Windows
+# Method 1: Use the run_gui.bat script which provides instructions and launches open_wsl.bat
+run_gui.bat
+
+# Method 2: Manual WSL approach
+# 1. Run open_wsl.bat to open a WSL terminal
+# 2. Navigate to the project directory: cd /mnt/c/path/to/Piper-TTS-Trainer
+# 3. Activate the virtual environment: source .venv/bin/activate
+# 4. Run the application: python piper_trainer_gui.py
+```
+
+The interface will be available at http://localhost:7860 in your web browser.
+
+## Workflow
+
+### 1. Prepare Dataset
+Import audio files and transcriptions to create a properly formatted dataset.
+
+### 2. Normalize Audio (Important!)
+Fix audio clipping issues to prevent "audio amplitude out of range" warnings during training.
+
+### 3. Preprocess Dataset
+Convert your normalized dataset into a format ready for training.
+
+### 4. Train Model
+Train your TTS model with GPU acceleration. The training process automatically detects and uses available GPU resources.
+
+### 5. Export Model
+Convert your trained model to ONNX format for production use.
+
+## Important Notes on PyTorch and GPU Support
+
+### PyTorch Version
+
+This project uses specific versions of PyTorch to ensure compatibility with the latest CUDA drivers:
+
+```
+# For RTX GPU with CUDA 12.8 support (default in setup scripts)
+torch==2.8.0.dev20250325+cu128
+torchvision==0.22.0.dev20250325+cu128
+torchaudio==2.6.0.dev20250325+cu128
+```
+
+If you encounter issues with the default PyTorch version, you can modify `setup.sh` or `setup.bat` to use a different version:
+
+- **For older NVIDIA GPUs with CUDA 11.8**:
+  ```
+  torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+  ```
+
+- **For CPU-only usage** (much slower training):
+  ```
+  torch>=2.2.0 torchvision>=0.15.0 torchaudio>=2.0.0
+  ```
+
+### GPU Acceleration
+
+The training process is configured to use GPU by default. If a CUDA-capable GPU is detected, training will automatically use it. For optimal performance:
+
+- Ensure your NVIDIA drivers are up to date
+- Use a GPU with at least 8GB VRAM for reasonable training times
+- The batch size can be adjusted in the GUI based on your GPU memory
+
+## Troubleshooting
+
+### PyTorch/CUDA Issues
+
+If you encounter CUDA-related errors:
+
+1. Check your NVIDIA driver version with `nvidia-smi`
+2. Modify the PyTorch installation in `setup.sh` to match your CUDA version
+3. Reinstall with: `pip install --force-reinstall [pytorch-version]`
+
+### WSL Issues
+
+If you encounter WSL-related issues:
+
+1. Ensure WSL 2 is enabled: `wsl --set-default-version 2`
+2. Update the WSL kernel: `wsl --update`
+3. Check Ubuntu installation: `wsl --list --verbose`
+
+## License
+
+[Insert your license information here]
+
+## Acknowledgments
+
+- This project builds upon the [Piper TTS system](https://github.com/rhasspy/piper)
+- Special thanks to the contributors of the original Piper project

@@ -8,7 +8,12 @@ import subprocess
 import glob
 import torch
 import re
+import json
 from pathlib import Path
+import numpy as np
+import librosa
+import soundfile as sf
+from tqdm import tqdm
 
 # Define paths
 PIPER_HOME = os.path.abspath(os.path.dirname(__file__))
@@ -17,9 +22,10 @@ TRAINING_DIR = os.path.join(PIPER_HOME, "training")
 CHECKPOINTS_DIR = os.path.join(PIPER_HOME, "checkpoints")
 MODELS_DIR = os.path.join(PIPER_HOME, "models")
 LOGS_DIR = os.path.join(PIPER_HOME, "logs")
+NORMALIZED_DIR = os.path.join(PIPER_HOME, "normalized_wavs")
 
 # Ensure directories exist
-for directory in [DATASETS_DIR, TRAINING_DIR, CHECKPOINTS_DIR, MODELS_DIR, LOGS_DIR]:
+for directory in [DATASETS_DIR, TRAINING_DIR, CHECKPOINTS_DIR, MODELS_DIR, LOGS_DIR, NORMALIZED_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Language options for preprocessing
@@ -39,6 +45,86 @@ def get_piper_python():
         return os.path.join(PIPER_HOME, "piper\\src\\python\\.venv\\Scripts\\python.exe")
     else:  # Linux/Mac
         return os.path.join(PIPER_HOME, "piper/src/python/.venv/bin/python3")
+
+# Audio normalization functions
+def normalize_audio_file(
+    input_file,
+    output_file,
+    target_peak=0.95,
+    sample_rate=22050,
+    overwrite=False
+):
+    """
+    Normalize audio file to have a peak amplitude at the specified target level.
+    """
+    # Skip if output exists and we're not overwriting
+    if os.path.exists(output_file) and not overwrite:
+        return False
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    try:
+        # Load audio without normalization to get original values
+        y, sr = librosa.load(input_file, sr=sample_rate, normalize=False)
+        
+        # Compute current peak amplitude
+        current_peak = np.max(np.abs(y))
+        
+        if current_peak > 0:
+            # Calculate scaling factor
+            scaling_factor = target_peak / current_peak
+            
+            # Apply scaling to normalize
+            y_normalized = y * scaling_factor
+            
+            # Save normalized audio
+            sf.write(output_file, y_normalized, sample_rate)
+            return True
+        else:
+            return False
+            
+    except Exception as e:
+        return False
+
+def normalize_audio_dataset(input_dir, output_dir, target_peak=0.95, sample_rate=22050, overwrite=False):
+    """
+    Normalize all audio files in a dataset directory.
+    """
+    try:
+        # Get all WAV files in the input directory
+        audio_files = []
+        wavs_dir = os.path.join(input_dir, "wavs")
+        if os.path.exists(wavs_dir):
+            audio_files.extend(glob.glob(os.path.join(wavs_dir, "*.wav")))
+        else:
+            audio_files.extend(glob.glob(os.path.join(input_dir, "*.wav")))
+        
+        if not audio_files:
+            return f"No audio files found in {input_dir}", 0
+        
+        # Create output directory structure
+        output_wavs_dir = os.path.join(output_dir, "wavs")
+        os.makedirs(output_wavs_dir, exist_ok=True)
+        
+        # Copy metadata.csv if it exists
+        metadata_path = os.path.join(input_dir, "metadata.csv")
+        if os.path.exists(metadata_path):
+            shutil.copy2(metadata_path, os.path.join(output_dir, "metadata.csv"))
+        
+        # Process each audio file
+        processed_count = 0
+        for audio_file in audio_files:
+            filename = os.path.basename(audio_file)
+            output_file = os.path.join(output_wavs_dir, filename)
+            
+            if normalize_audio_file(audio_file, output_file, target_peak, sample_rate, overwrite):
+                processed_count += 1
+        
+        return f"Successfully normalized {processed_count} of {len(audio_files)} files", processed_count
+    
+    except Exception as e:
+        return f"Error normalizing audio: {str(e)}", 0
 
 # Dataset preparation function
 def prepare_dataset(audio_dir, transcription_file=None, output_name=None):
@@ -148,6 +234,9 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
     try:
         python_exe = get_piper_python()
         
+        # Check for GPU
+        gpu_available = torch.cuda.is_available()
+        
         # Build command
         cmd = [
             python_exe,
@@ -169,10 +258,18 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
         if checkpoint_path and os.path.exists(checkpoint_path):
             cmd.extend(["--resume_from_checkpoint", checkpoint_path])
         
-        # Check for GPU
-        if torch.cuda.is_available():
+        # Configure GPU/CPU training
+        if gpu_available:
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_mem = round(torch.cuda.get_device_properties(0).total_memory / (1024**3), 2)
+            yield f"GPU detected: {gpu_name} ({gpu_mem} GB memory)"
+            yield "Training will use GPU acceleration for faster processing."
+            
             cmd.extend(["--accelerator", "gpu", "--devices", "1"])
         else:
+            yield "WARNING: No GPU detected! Training will use CPU (much slower)."
+            yield "For faster training, consider running on a system with an NVIDIA GPU."
+            
             cmd.extend(["--accelerator", "cpu"])
         
         # Start training as a process
@@ -201,10 +298,71 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
     except Exception as e:
         yield f"Error during training: {str(e)}"
 
+# Export model to ONNX
+def export_model_to_onnx(checkpoint_path, output_path, streaming=False):
+    try:
+        python_exe = get_piper_python()
+        
+        # Determine which exporter to use
+        export_module = "piper_train.export_onnx_streaming" if streaming else "piper_train.export_onnx"
+        
+        # Build command
+        cmd = [
+            python_exe,
+            "-m", export_module,
+            checkpoint_path,
+            output_path
+        ]
+        
+        # Run export process
+        process = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if process.returncode == 0:
+            return True, f"Successfully exported model to {output_path}", process.stdout
+        else:
+            return False, f"Failed to export model. See logs for details.", process.stderr
+    
+    except Exception as e:
+        return False, f"Error exporting model: {str(e)}", str(e)
+
+# Helper function to create model config
+def create_model_config(output_dir, model_name, language="en", quality="medium", speaker_id=0):
+    try:
+        # Create config
+        config = {
+            "model": {
+                "name": model_name,
+                "language": language,
+                "quality": quality,
+                "speaker_id": speaker_id
+            },
+            "inference": {
+                "noise_scale": 0.667,
+                "length_scale": 1.0,
+                "noise_w": 0.8
+            }
+        }
+        
+        # Write config
+        config_path = os.path.join(output_dir, f"{model_name}.json")
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2)
+        
+        return config_path
+    
+    except Exception as e:
+        return None
+
 # Helper functions for UI
 def list_datasets():
     try:
         return [d for d in os.listdir(DATASETS_DIR) if os.path.isdir(os.path.join(DATASETS_DIR, d))]
+    except:
+        return []
+
+def list_normalized_datasets():
+    try:
+        return [d for d in os.listdir(NORMALIZED_DIR) if os.path.isdir(os.path.join(NORMALIZED_DIR, d))]
     except:
         return []
 
@@ -280,12 +438,94 @@ def create_interface():
                     outputs=[prepare_output, gr.State()]
                 )
             
-            # Tab 2: Preprocess Dataset
-            with gr.TabItem("2. Preprocess Dataset"):
+            # Tab 2: Normalize Audio
+            with gr.TabItem("2. Normalize Audio"):
+                gr.Markdown("### Normalize audio to fix clipping issues")
+                gr.Markdown("This step scales audio files to prevent 'audio amplitude out of range' warnings")
+                
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        normalize_dataset_dropdown = gr.Dropdown(
+                            choices=list_datasets,
+                            label="Select Dataset to Normalize",
+                            interactive=True
+                        )
+                        refresh_normalize_datasets_btn = gr.Button("Refresh Datasets")
+                        
+                        normalize_output_name = gr.Textbox(
+                            label="Output Dataset Name",
+                            placeholder="Name for normalized dataset (defaults to original name)"
+                        )
+                        
+                        target_peak = gr.Slider(
+                            minimum=0.1, 
+                            maximum=0.99, 
+                            step=0.01, 
+                            value=0.95,
+                            label="Target Peak Amplitude (0-1)"
+                        )
+                        
+                        sample_rate = gr.Number(
+                            value=22050, 
+                            label="Sample Rate (Hz)"
+                        )
+                        
+                        normalize_btn = gr.Button("Normalize Audio", variant="primary")
+                    
+                    with gr.Column(scale=2):
+                        normalize_status = gr.Textbox(
+                            label="Status", 
+                            interactive=False,
+                            lines=3
+                        )
+                
+                # Event handlers
+                refresh_normalize_datasets_btn.click(
+                    lambda: gr.update(choices=list_datasets()),
+                    outputs=normalize_dataset_dropdown
+                )
+                
+                def run_normalize(dataset, output_name, target_peak, sample_rate):
+                    if not dataset:
+                        return "Please select a dataset to normalize"
+                    
+                    # Set output name if not provided
+                    if not output_name:
+                        output_name = dataset
+                    
+                    # Set paths
+                    input_path = os.path.join(DATASETS_DIR, dataset)
+                    output_path = os.path.join(NORMALIZED_DIR, output_name)
+                    
+                    # Run normalization
+                    status, count = normalize_audio_dataset(
+                        input_path, 
+                        output_path, 
+                        target_peak, 
+                        sample_rate
+                    )
+                    
+                    return f"{status}\nOutput directory: {output_path}"
+                
+                normalize_btn.click(
+                    run_normalize,
+                    inputs=[normalize_dataset_dropdown, normalize_output_name, target_peak, sample_rate],
+                    outputs=normalize_status
+                )
+            
+            # Tab 3: Preprocess Dataset
+            with gr.TabItem("3. Preprocess Dataset"):
                 gr.Markdown("### Preprocess your dataset for training")
                 
                 with gr.Row():
                     with gr.Column(scale=3):
+                        with gr.Row():
+                            dataset_src = gr.Radio(
+                                ["Regular Dataset", "Normalized Dataset"], 
+                                label="Dataset Source", 
+                                value="Regular Dataset"
+                            )
+                        
                         dataset_dropdown = gr.Dropdown(
                             choices=list_datasets,
                             label="Select Dataset",
@@ -314,13 +554,30 @@ def create_interface():
                         preprocess_log = gr.Textbox(label="Processing Log", interactive=False, lines=10)
                 
                 # Event handlers
-                refresh_datasets_btn.click(
-                    lambda: gr.update(choices=list_datasets()),
+                def update_dataset_choices(src):
+                    if src == "Regular Dataset":
+                        return gr.update(choices=list_datasets(), label="Select Dataset")
+                    else:
+                        return gr.update(choices=list_normalized_datasets(), label="Select Normalized Dataset")
+                
+                dataset_src.change(
+                    update_dataset_choices,
+                    inputs=dataset_src,
                     outputs=dataset_dropdown
                 )
                 
-                def run_preprocess(dataset, language, sample_rate, format, single_speaker):
-                    dataset_path = os.path.join(DATASETS_DIR, dataset)
+                refresh_datasets_btn.click(
+                    lambda dataset_src: update_dataset_choices(dataset_src),
+                    inputs=dataset_src,
+                    outputs=dataset_dropdown
+                )
+                
+                def run_preprocess(src, dataset, language, sample_rate, format, single_speaker):
+                    if src == "Regular Dataset":
+                        dataset_path = os.path.join(DATASETS_DIR, dataset)
+                    else:
+                        dataset_path = os.path.join(NORMALIZED_DIR, dataset)
+                    
                     success, output_dir, log = preprocess_dataset(
                         dataset_path, language, sample_rate, format, single_speaker
                     )
@@ -332,12 +589,12 @@ def create_interface():
                 
                 preprocess_btn.click(
                     run_preprocess,
-                    inputs=[dataset_dropdown, language_dropdown, sample_rate, format_dropdown, single_speaker],
+                    inputs=[dataset_src, dataset_dropdown, language_dropdown, sample_rate, format_dropdown, single_speaker],
                     outputs=[preprocess_status, preprocess_log]
                 )
             
-            # Tab 3: Train Model
-            with gr.TabItem("3. Train Model"):
+            # Tab 4: Train Model
+            with gr.TabItem("4. Train Model"):
                 gr.Markdown("### Train your TTS model")
                 
                 with gr.Row():
@@ -425,6 +682,103 @@ def create_interface():
                     start_train,
                     inputs=[training_dir_dropdown, checkpoint_dropdown, batch_size, epochs, quality, precision],
                     outputs=training_output
+                )
+            
+            # Tab 5: Export Model
+            with gr.TabItem("5. Export Model"):
+                gr.Markdown("### Export trained model to ONNX format")
+                
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        export_checkpoint_dropdown = gr.Dropdown(
+                            choices=list_checkpoints,
+                            label="Select Checkpoint to Export",
+                            interactive=True
+                        )
+                        refresh_export_checkpoints_btn = gr.Button("Refresh Checkpoints")
+                        
+                        model_name = gr.Textbox(
+                            label="Model Name", 
+                            placeholder="Name for your exported model"
+                        )
+                        
+                        model_language = gr.Dropdown(
+                            choices=list(LANGUAGES.keys()),
+                            value="en",
+                            label="Model Language"
+                        )
+                        
+                        model_quality = gr.Dropdown(
+                            choices=["low", "medium", "high"],
+                            value="medium",
+                            label="Model Quality"
+                        )
+                        
+                        streaming_mode = gr.Checkbox(
+                            label="Enable Streaming Mode", 
+                            value=True,
+                            info="Recommended for faster inference"
+                        )
+                        
+                        export_btn = gr.Button("Export Model", variant="primary")
+                    
+                    with gr.Column(scale=2):
+                        export_status = gr.Textbox(
+                            label="Status", 
+                            interactive=False,
+                            lines=3
+                        )
+                        export_log = gr.Textbox(
+                            label="Export Log", 
+                            interactive=False, 
+                            lines=10
+                        )
+                
+                # Event handlers
+                refresh_export_checkpoints_btn.click(
+                    lambda: gr.update(choices=list_checkpoints()),
+                    outputs=export_checkpoint_dropdown
+                )
+                
+                def run_export(checkpoint, model_name, language, quality, streaming):
+                    if not checkpoint:
+                        return "Please select a checkpoint to export", ""
+                    
+                    if not model_name:
+                        # Extract model name from checkpoint path
+                        model_name = os.path.basename(os.path.dirname(checkpoint))
+                    
+                    # Set paths
+                    checkpoint_path = os.path.join(PIPER_HOME, checkpoint)
+                    model_dir = os.path.join(MODELS_DIR, model_name)
+                    os.makedirs(model_dir, exist_ok=True)
+                    
+                    output_path = os.path.join(model_dir, f"{model_name}.onnx")
+                    
+                    # Export model
+                    success, status, log = export_model_to_onnx(
+                        checkpoint_path, 
+                        output_path, 
+                        streaming
+                    )
+                    
+                    if success:
+                        # Create model config file
+                        config_path = create_model_config(
+                            model_dir, 
+                            model_name, 
+                            language, 
+                            quality
+                        )
+                        
+                        return f"{status}\nModel config created at {config_path}", log
+                    else:
+                        return status, log
+                
+                export_btn.click(
+                    run_export,
+                    inputs=[export_checkpoint_dropdown, model_name, model_language, model_quality, streaming_mode],
+                    outputs=[export_status, export_log]
                 )
     
     return app

@@ -6,6 +6,8 @@
 *.m4a
 *.aac
 wavs/
+normalized_wavs/
+audio_cache/
 
 # Cursor workspace
 *.code-workspace
@@ -20,6 +22,9 @@ models/
 *.pth
 piper/
 piper-phonemize/
+datasets/
+training/
+output/
 
 # Python
 __pycache__/
@@ -57,5 +62,27 @@ espeak-ng-data/
 .DS_Store
 Thumbs.db 
 
-#transcriptions
+# Transcriptions
 *.csv
+
+# Logs and temporary files
+logs/
+*.log
+error.log
+temp_*
+
+# Binary files and libraries
+*.so*
+*.dll
+*.dylib
+*.a
+*.o
+*.bin
+*.exe
+piper_*
+libpiper_*
+libonnxruntime*
+libespeak-ng*
+espeak-ng
+libtashkeel_model.ort
+*.tar.gz
