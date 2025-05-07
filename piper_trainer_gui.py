@@ -24,6 +24,22 @@ MODELS_DIR = os.path.join(PIPER_HOME, "models")
 LOGS_DIR = os.path.join(PIPER_HOME, "logs")
 NORMALIZED_DIR = os.path.join(PIPER_HOME, "normalized_wavs")
 
+# Add function to convert WSL paths to Windows paths and vice versa
+def convert_path_if_needed(path):
+    """Convert between WSL and Windows paths if needed"""
+    if os.name == 'nt':  # Running on Windows
+        # Convert /mnt/c/... to C:/...
+        if path.startswith('/mnt/'):
+            drive_letter = path[5:6].upper()
+            return f"{drive_letter}:{path[6:].replace('/', '\\')}"
+    else:  # Running on Linux/WSL
+        # Convert C:/... or C:\... to /mnt/c/...
+        if re.match(r'^[a-zA-Z]:[/\\]', path):
+            drive_letter = path[0].lower()
+            path_suffix = path[2:].replace('\\', '/')
+            return f"/mnt/{drive_letter}/{path_suffix}"
+    return path
+
 # Ensure directories exist
 for directory in [DATASETS_DIR, TRAINING_DIR, CHECKPOINTS_DIR, MODELS_DIR, LOGS_DIR, NORMALIZED_DIR]:
     os.makedirs(directory, exist_ok=True)
@@ -92,6 +108,10 @@ def normalize_audio_dataset(input_dir, output_dir, target_peak=0.95, sample_rate
     Normalize all audio files in a dataset directory.
     """
     try:
+        # Convert paths if needed
+        input_dir = convert_path_if_needed(input_dir)
+        output_dir = convert_path_if_needed(output_dir)
+        
         # Get all WAV files in the input directory
         audio_files = []
         wavs_dir = os.path.join(input_dir, "wavs")
@@ -129,6 +149,11 @@ def normalize_audio_dataset(input_dir, output_dir, target_peak=0.95, sample_rate
 # Dataset preparation function
 def prepare_dataset(audio_dir, transcription_file=None, output_name=None):
     try:
+        # Convert paths if needed (WSL/Windows compatibility)
+        audio_dir = convert_path_if_needed(audio_dir)
+        if transcription_file:
+            transcription_file = convert_path_if_needed(transcription_file)
+            
         # If no output name provided, use the last part of audio_dir
         if not output_name:
             output_name = os.path.basename(os.path.normpath(audio_dir))
@@ -197,6 +222,9 @@ def prepare_dataset(audio_dir, transcription_file=None, output_name=None):
 # Preprocess dataset function
 def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeech", single_speaker=True):
     try:
+        # Convert path if needed
+        dataset_dir = convert_path_if_needed(dataset_dir)
+        
         # Get dataset name from directory
         dataset_name = os.path.basename(os.path.normpath(dataset_dir))
         output_dir = os.path.join(TRAINING_DIR, dataset_name)
@@ -301,6 +329,10 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
 # Export model to ONNX
 def export_model_to_onnx(checkpoint_path, output_path, streaming=False):
     try:
+        # Convert paths if needed
+        checkpoint_path = convert_path_if_needed(checkpoint_path)
+        output_path = convert_path_if_needed(output_path)
+        
         python_exe = get_piper_python()
         
         # Determine which exporter to use
@@ -497,6 +529,10 @@ def create_interface():
                     input_path = os.path.join(DATASETS_DIR, dataset)
                     output_path = os.path.join(NORMALIZED_DIR, output_name)
                     
+                    # Convert paths if needed
+                    input_path = convert_path_if_needed(input_path)
+                    output_path = convert_path_if_needed(output_path)
+                    
                     # Run normalization
                     status, count = normalize_audio_dataset(
                         input_path, 
@@ -660,12 +696,14 @@ def create_interface():
                         return "Please select a training directory"
                     
                     full_training_dir = os.path.join(TRAINING_DIR, training_dir)
+                    full_training_dir = convert_path_if_needed(full_training_dir)
                     
                     if not os.path.exists(full_training_dir):
                         return f"Training directory not found: {full_training_dir}"
                     
                     if checkpoint:
                         full_checkpoint = os.path.join(PIPER_HOME, checkpoint)
+                        full_checkpoint = convert_path_if_needed(full_checkpoint)
                     else:
                         full_checkpoint = None
                     
