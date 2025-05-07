@@ -181,149 +181,168 @@ and then run `piper` with the `--cuda` argument. You will need to have a functio
 
 # Piper TTS Trainer
 
-A complete end-to-end solution for training custom text-to-speech (TTS) voices using the Piper neural TTS system. This project provides a user-friendly graphical interface for dataset preparation, audio normalization, preprocessing, training, and model export.
+A comprehensive GUI toolkit for training custom text-to-speech voices using the Piper engine.
 
-## Important: Linux Required
+## Overview
 
-**This project only runs on Linux-based operating systems.** Windows users must use Windows Subsystem for Linux (WSL) to run Piper TTS Trainer.
+Piper TTS Trainer provides an end-to-end solution for creating, recording, and training custom voice models for text-to-speech applications. The project combines three key components:
 
-## Features
+1. **Piper Engine** - The core TTS system
+2. **Recording Studio** - A web interface for recording voice datasets
+3. **Training GUI** - A graphical interface for model training and testing
 
-- **User-friendly GUI**: Complete graphical interface for all stages of voice creation
-- **Dataset Preparation**: Convert raw audio files into properly formatted datasets
-- **Audio Normalization**: Fix clipping issues to prevent "audio amplitude out of range" warnings
-- **Preprocessing**: Convert datasets into training-ready format
-- **Model Training**: Train your TTS model with GPU acceleration
-- **Model Export**: Convert trained models to ONNX format for inference
+## System Requirements
+
+- **Operating System**: Ubuntu 20.04+ (or Windows 10/11 with WSL2)
+- **Python**: 3.9+
+- **Storage**: At least 20GB free space
+- **Memory**: 16GB RAM recommended (8GB minimum)
+- **GPU**: NVIDIA GPU with CUDA support recommended for faster training
+- **Audio**: Microphone (for recording datasets)
 
 ## Installation
 
-### Windows Users (WSL Required)
+### Option 1: Automatic Setup with Poetry (Recommended)
 
-1. **Install WSL**:
-   - Run the `install_wsl.bat` script as administrator
-   - Your computer will restart after the installation completes
-   - After restart, Ubuntu will continue setup and prompt you to create a username and password
-
-2. **After WSL Setup**:
-   - Open Ubuntu from the Start menu
-   - Navigate to your Piper TTS Trainer directory:
+1. Clone this repository:
    ```bash
-   cd /mnt/c/path/to/Piper-TTS-Trainer
-   ```
-   - Run the setup script:
-   ```bash
-   ./setup.sh
-   ```
-
-### Linux Users (Native)
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/yourusername/Piper-TTS-Trainer.git
+   git clone https://github.com/josepheudave/Piper-TTS-Trainer.git
    cd Piper-TTS-Trainer
+   in wls cd /mnt/path/to/Piper-TTS-Trainer
    ```
 
-2. **Run the setup script**:
+2. Run the setup script:
    ```bash
-   chmod +x setup.sh
-   ./setup.sh
+   bash setup_poetry.sh
+   ```
+   
+   This script will:
+   - Install system dependencies
+   - Set up Poetry environment
+   - Clone necessary repositories
+   - Configure CUDA for GPU acceleration (if available)
+   - Build required components
+   - Create launcher scripts
+
+3. Download pre-trained checkpoints (optional but recommended):
+   ```bash
+   bash download_checkpoints.sh
    ```
 
-## Running the Application
+### Option 2: Manual Setup
 
-### Start the GUI
+For advanced users who prefer manual configuration, follow these steps:
 
-```bash
-# Linux/WSL
-./run_gui.sh
+1. Install system dependencies:
+   ```bash
+   sudo apt update && sudo apt install -y python3-dev python3-pip espeak-ng ffmpeg build-essential git curl libespeak-ng-dev pkg-config cmake
+   ```
 
-# Windows
-# Method 1: Use the run_gui.bat script which provides instructions and launches open_wsl.bat
-run_gui.bat
+2. Clone required repositories:
+   ```bash
+   git clone https://github.com/rhasspy/piper.git
+   git clone https://github.com/rhasspy/piper-recording-studio.git
+   git clone https://github.com/rhasspy/piper-phonemize.git
+   ```
 
-# Method 2: Manual WSL approach
-# 1. Run open_wsl.bat to open a WSL terminal
-# 2. Navigate to the project directory: cd /mnt/c/path/to/Piper-TTS-Trainer
-# 3. Activate the virtual environment: source .venv/bin/activate
-# 4. Run the application: python piper_trainer_gui.py
-```
+3. Install Poetry:
+   ```bash
+   curl -sSL https://install.python-poetry.org | python3 -
+   ```
 
-The interface will be available at http://localhost:7860 in your web browser.
+4. Create and configure your environment manually following the steps in `setup_poetry.sh`
 
-## Workflow
+## Usage
 
-### 1. Prepare Dataset
-Import audio files and transcriptions to create a properly formatted dataset.
+### Recording Voice Dataset
 
-### 2. Normalize Audio (Important!)
-Fix audio clipping issues to prevent "audio amplitude out of range" warnings during training.
+1. Start the recording studio:
+   ```bash
+   ./run_recording_studio.sh
+   ```
 
-### 3. Preprocess Dataset
-Convert your normalized dataset into a format ready for training.
+2. Open your browser and navigate to http://localhost:8000
 
-### 4. Train Model
-Train your TTS model with GPU acceleration. The training process automatically detects and uses available GPU resources.
+3. Follow the on-screen instructions to:
+   - Create a new speaker profile
+   - Record sentences 
+   - Review and re-record as needed
 
-### 5. Export Model
-Convert your trained model to ONNX format for production use.
+4. Export your dataset:
+   ```bash
+   ./export_dataset.sh en-GB my-dataset
+   ```
+   Replace `en-GB` with your language code and `my-dataset` with your preferred name.
 
-## Important Notes on PyTorch and GPU Support
+### Training a Voice Model
 
-### PyTorch Version
+1. Launch the training GUI:
+   ```bash
+   ./run_gui.sh
+   ```
 
-This project uses specific versions of PyTorch to ensure compatibility with the latest CUDA drivers:
+2. Open your browser and navigate to http://localhost:7860
 
-```
-# For RTX GPU with CUDA 12.8 support (default in setup scripts)
-torch==2.8.0.dev20250325+cu128
-torchvision==0.22.0.dev20250325+cu128
-torchaudio==2.6.0.dev20250325+cu128
-```
+3. Use the interface to:
+   - Select your dataset
+   - Configure training parameters
+   - Start training
+   - Monitor progress
+   - Test your model
 
-If you encounter issues with the default PyTorch version, you can modify `setup.sh` or `setup.bat` to use a different version:
+### Using Your Trained Model
 
-- **For older NVIDIA GPUs with CUDA 11.8**:
-  ```
-  torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
-  ```
+Once training is complete, you can:
 
-- **For CPU-only usage** (much slower training):
-  ```
-  torch>=2.2.0 torchvision>=0.15.0 torchaudio>=2.0.0
-  ```
+1. Export your model to ONNX format using the GUI
+2. Use the model with the Piper TTS engine
+3. Integrate with other applications like Home Assistant
 
-### GPU Acceleration
+## Project Structure
 
-The training process is configured to use GPU by default. If a CUDA-capable GPU is detected, training will automatically use it. For optimal performance:
-
-- Ensure your NVIDIA drivers are up to date
-- Use a GPU with at least 8GB VRAM for reasonable training times
-- The batch size can be adjusted in the GUI based on your GPU memory
+- `checkpoints/` - Pre-trained model checkpoints
+- `datasets/` - Voice datasets
+- `training/` - Training outputs and logs
+- `models/` - Exported TTS models
+- `normalized_wavs/` - Processed audio files
+- `piper/` - Piper engine source code
+- `piper-recording-studio/` - Recording studio interface
+- `piper-phonemize/` - Text phonemization module
 
 ## Troubleshooting
 
-### PyTorch/CUDA Issues
+### Common Issues
 
-If you encounter CUDA-related errors:
+1. **CUDA/GPU errors**:
+   - Ensure your NVIDIA drivers are up to date
+   - Check compatibility between PyTorch and CUDA versions
 
-1. Check your NVIDIA driver version with `nvidia-smi`
-2. Modify the PyTorch installation in `setup.sh` to match your CUDA version
-3. Reinstall with: `pip install --force-reinstall [pytorch-version]`
+2. **Audio recording issues**:
+   - Verify microphone permissions in browser
+   - Check microphone settings in your OS
 
-### WSL Issues
+3. **Training fails to start**:
+   - Ensure the dataset is properly exported
+   - Check for sufficient disk space
 
-If you encounter WSL-related issues:
+### Getting Help
 
-1. Ensure WSL 2 is enabled: `wsl --set-default-version 2`
-2. Update the WSL kernel: `wsl --update`
-3. Check Ubuntu installation: `wsl --list --verbose`
+If you encounter issues not covered here:
+- Check the [Piper GitHub repository](https://github.com/rhasspy/piper/issues)
+- Visit the [Rhasspy community forums](https://community.rhasspy.org/)
+
+## Additional Resources
+
+- [Piper Documentation](https://github.com/rhasspy/piper/blob/master/README.md)
+- [Guide to Creating Custom TTS Voices](https://ssamjh.nz/create-custom-piper-tts-voice/)
+- [Rhasspy Project](https://rhasspy.readthedocs.io/)
 
 ## License
 
-[Insert your license information here]
+This project includes components under various open source licenses. See individual repositories for details.
 
 ## Acknowledgments
 
-- This project builds upon the [Piper TTS system](https://github.com/rhasspy/piper)
-- Special thanks to the contributors of the original Piper project
+- Based on the [Piper TTS engine](https://github.com/rhasspy/piper) by [Michael Hansen](https://github.com/synesthesiam)
+- Recording Studio based on [piper-recording-studio](https://github.com/rhasspy/piper-recording-studio)
+- Setup process inspired by the guide at [ssamjh.nz](https://ssamjh.nz/create-custom-piper-tts-voice/)

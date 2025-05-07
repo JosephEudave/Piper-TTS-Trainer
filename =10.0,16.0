@@ -1,0 +1,50 @@
+The following packages are already present in the pyproject.toml and will be skipped:
+
+  - httpx
+  - aiofiles
+  - fastapi
+  - ffmpy
+  - huggingface-hub
+  - python-dateutil
+  - tzdata
+  - pytz
+  - annotated-types
+  - typing-inspection
+  - pydub
+  - python-multipart
+  - ruff
+  - safehttpx
+  - starlette
+  - tomlkit
+  - typer
+  - rich
+  - shellingham
+  - uvicorn
+  - websockets
+  - click
+  - tqdm
+
+If you want to update it to the latest compatible version, you can use `poetry update package`.
+If you prefer to upgrade it to the latest available version, you can use `poetry add package@latest`.
+
+
+Updating dependencies
+Resolving dependencies...
+
+Package operations: 45 installs, 6 updates, 0 removals
+
+  - Downgrading numpy (2.2.5 -> 1.24.3)
+
+PEP517 build of a dependency failed
+
+Backend 'setuptools.build_meta:__legacy__' is not available.
+
+Note: This error originates from the build backend, and is likely not a problem with poetry but one of the following issues with numpy (1.24.3)
+
+  - not supporting PEP 517 builds
+  - not specifying PEP 517 build requirements correctly
+  - the build requirements are incompatible with your operating system or Python version
+  - the build requirements are missing system dependencies (eg: compilers, libraries, headers).
+
+You can verify this by running pip wheel --no-cache-dir --use-pep517 "numpy (==1.24.3)".
+

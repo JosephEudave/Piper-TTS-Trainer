@@ -32,6 +32,7 @@ mkdir -p "$PIPER_HOME/datasets"
 mkdir -p "$PIPER_HOME/training"
 mkdir -p "$PIPER_HOME/models"
 mkdir -p "$PIPER_HOME/normalized_wavs"
+mkdir -p "$PIPER_HOME/logs"  # Add logs directory
 
 # Check for NVIDIA GPU
 echo "Checking for NVIDIA GPU..."
@@ -49,6 +50,7 @@ fi
 # Update system and install required packages
 echo "Installing system dependencies..."
 sudo apt update
+sudo apt dist-upgrade -y
 sudo apt install -y python3-dev python3-venv espeak-ng ffmpeg build-essential git
 # Additional build dependencies for piper_phonemize
 sudo apt install -y libespeak-ng-dev pkg-config cmake
@@ -71,87 +73,81 @@ if [ "$WSL_ENVIRONMENT" = true ] && [ "$GPU_AVAILABLE" = true ]; then
     fi
 fi
 
-# Clone Piper repository if it doesn't exist
+# Step 1: Clone Piper Recording Studio repository
+echo "Setting up Piper Recording Studio..."
+if [ ! -d "piper-recording-studio" ]; then
+    echo "Cloning Piper Recording Studio repository..."
+    git clone https://github.com/rhasspy/piper-recording-studio.git
+fi
+
+# Step 2: Clone Piper repository if it doesn't exist
 if [ ! -d "piper" ]; then
     echo "Cloning Piper repository..."
     git clone https://github.com/rhasspy/piper.git
 fi
 
-# Create and activate Python virtual environment in the root directory
-echo "Setting up Python environment..."
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+# Setup piper-phonemize
+echo "Setting up piper-phonemize with ONNX runtime..."
+# Clone piper-phonemize if it doesn't exist
+if [ ! -d "piper-phonemize" ]; then
+    echo "Cloning piper-phonemize repository..."
+    git clone https://github.com/rhasspy/piper-phonemize.git
 fi
-source .venv/bin/activate
 
-# Install Python dependencies in the correct order
+cd "$PIPER_HOME/piper-phonemize"
+# Remove old ONNX runtime if it exists and install new version
+rm -rf onnxruntime-linux-x64-1.8.1* || true
+wget https://github.com/microsoft/onnxruntime/releases/download/v1.14.1/onnxruntime-linux-x64-1.14.1.tgz
+tar xf onnxruntime-linux-x64-1.14.1.tgz
+
+# Ensure directory structure exists
+mkdir -p lib/Linux-x86_64/onnxruntime/include/
+mkdir -p lib/Linux-x86_64/onnxruntime/lib/
+
+# Copy ONNX runtime files
+cp -r onnxruntime-linux-x64-1.14.1/include/* lib/Linux-x86_64/onnxruntime/include/
+cp onnxruntime-linux-x64-1.14.1/lib/* lib/Linux-x86_64/onnxruntime/lib/
+
+# Step 3: Create a single virtual environment in the root directory
+echo "Setting up a single Python environment..."
+python3 -m venv "$PIPER_HOME/.venv"
+source "$PIPER_HOME/.venv/bin/activate"
+
+# Install Python dependencies
 echo "Installing Python base packages..."
 python3 -m pip install --upgrade pip
 python3 -m pip install --upgrade wheel setuptools
-python3 -m pip install pybind11  # Required for piper_phonemize
 
-# Install PyTorch based on GPU availability
-if [ "$GPU_AVAILABLE" = true ]; then
-    echo "Installing PyTorch with CUDA support..."
-    
-    # Choose PyTorch version based on CUDA version
-    if [[ $(echo "$CUDA_VERSION >= 12.0" | bc -l) -eq 1 ]]; then
-        echo "Installing PyTorch nightly build with CUDA 12.8 support..."
-        python3 -m pip install --pre torch==2.8.0.dev20250325+cu128 torchvision==0.22.0.dev20250325+cu128 torchaudio==2.6.0.dev20250325+cu128 --index-url https://download.pytorch.org/whl/nightly/cu128
-    elif [[ $(echo "$CUDA_VERSION >= 11.8" | bc -l) -eq 1 ]]; then
-        echo "Installing PyTorch with CUDA 11.8 support..."
-        python3 -m pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
-    elif [[ $(echo "$CUDA_VERSION >= 11.6" | bc -l) -eq 1 ]]; then
-        echo "Installing PyTorch with CUDA 11.6 support..."
-        python3 -m pip install torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 --index-url https://download.pytorch.org/whl/cu116
-    else
-        echo "Warning: Your CUDA version ($CUDA_VERSION) may not be compatible with current PyTorch versions."
-        echo "Attempting to install latest PyTorch with CUDA support..."
-        python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-    fi
-else
-    echo "Installing PyTorch for CPU (training will be slower)..."
-    python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-fi
+# Install specific PyTorch version
+echo "Installing specified PyTorch version..."
+python3 -m pip install --pre torch==2.8.0.dev20250325+cu128 torchvision==0.22.0.dev20250325+cu128 torchaudio==2.6.0.dev20250325+cu128 --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # Verify PyTorch installation
 echo "Verifying PyTorch installation..."
 python3 -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if torch.cuda.is_available() else 'N/A'); print('GPU device count:', torch.cuda.device_count()); print('GPU device name:', torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else 'N/A')"
 
-# Install specific versions of dependencies required by piper-train
-echo "Installing piper-train dependencies in correct order..."
-python3 -m pip install cython==0.29.36
-python3 -m pip install torchmetrics==0.11.4
-python3 -m pip install pytorch-lightning==2.0.6
-python3 -m pip install onnxruntime==1.14.1
-python3 -m pip install librosa==0.9.2
-python3 -m pip install numpy==1.24.3  # Specific numpy version
+# Install other requirements
+echo "Installing additional dependencies..."
+python3 -m pip install -r "$PIPER_HOME/requirements.txt"
 
-# Fix for phonemize_espeak import error
-echo "Building and installing piper_phonemize..."
-cd "$PIPER_HOME/piper/src"
-mkdir -p build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-cd "$PIPER_HOME"
+# Install piper-phonemize
+echo "Installing piper-phonemize from local repository..."
+python3 -m pip install "$PIPER_HOME/piper-phonemize/"
 
-# Verify piper_phonemize installation
+# Verify piper-phonemize
 if python3 -c "import piper_phonemize" &> /dev/null; then
-    echo "piper_phonemize is installed correctly."
+    echo "piper_phonemize is installed correctly!"
 else
-    echo "WARNING: piper_phonemize not found, trying alternate installation method..."
-    cd "$PIPER_HOME/piper/src/python"
-    python3 -m pip install --no-deps -e .
+    echo "WARNING: piper_phonemize installation failed. Trying alternate method..."
+    # Try alternate installation method
+    cd "$PIPER_HOME/piper/src"
+    mkdir -p build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    make
     cd "$PIPER_HOME"
     
-    # Try to install specific version
-    if ! python3 -c "import piper_phonemize" &> /dev/null; then
-        echo "Attempting to install specific piper_phonemize version..."
-        python3 -m pip install piper_phonemize==1.1.0
-    fi
-    
-    # Check again
+    # Verify again
     if python3 -c "import piper_phonemize" &> /dev/null; then
         echo "piper_phonemize installed successfully via alternate method."
     else
@@ -162,29 +158,44 @@ fi
 # Install Piper in development mode
 echo "Installing Piper in development mode..."
 cd "$PIPER_HOME/piper/src/python"
-python3 -m pip install --no-deps -e .
+python3 -m pip install -e .
 
 # Build monotonic align
 echo "Building monotonic align module..."
-bash build_monotonic_align.sh
+mkdir -p "$PIPER_HOME/logs"
+LOG_FILE="logs/build_monotonic_align.log"
+echo "Full logs will be saved to $PIPER_HOME/$LOG_FILE"
+# Using exact path to build script
+SCRIPT_PATH="/mnt/c/Users/User/Documents/GitHub/Piper-TTS-Trainer/piper/src/python/build_monotonic_align.sh"
+echo "Using build script at: $SCRIPT_PATH"
 
-# Install remaining dependencies
-echo "Installing additional dependencies..."
-if [ -f "$PIPER_HOME/requirements.txt" ]; then
-    # Install with --no-deps to avoid overwriting the specific versions we installed
-    python3 -m pip install --no-deps -r "$PIPER_HOME/requirements.txt"
+# Directly run the script without log redirection
+if [ -f "$SCRIPT_PATH" ]; then
+    echo "Found build script, executing..."
+    cd "$PIPER_HOME/piper/src/python"
+    sudo bash build_monotonic_align.sh
 else
-    echo "No requirements.txt found, installing essential packages..."
-    python3 -m pip install gradio==3.50.2 soundfile tqdm
+    echo "ERROR: Build script not found at $SCRIPT_PATH"
+    echo "Trying to find the script in standard locations..."
+    
+    # Try alternative paths
+    for alt_path in "$PIPER_HOME/piper/src/python/build_monotonic_align.sh" \
+                    "./piper/src/python/build_monotonic_align.sh"
+    do
+        if [ -f "$alt_path" ]; then
+            echo "Found at $alt_path, executing..."
+            cd "$(dirname "$alt_path")"
+            sudo bash "$(basename "$alt_path")"
+            break
+        fi
+    done
 fi
 
-# Final verification of key packages
-echo "Verifying critical packages..."
-python3 -c "import torch; print('PyTorch:', torch.__version__)"
-python3 -c "import torchmetrics; print('torchmetrics:', torchmetrics.__version__)"
-python3 -c "import pytorch_lightning; print('pytorch_lightning:', pytorch_lightning.__version__)"
-python3 -c "import onnxruntime; print('onnxruntime:', onnxruntime.__version__)"
-python3 -c "import piper_phonemize; print('piper_phonemize installed')"
+# Install Piper Recording Studio dependencies
+echo "Installing Piper Recording Studio dependencies..."
+cd "$PIPER_HOME/piper-recording-studio"
+python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements_export.txt
 
 # Return to the home directory
 cd "$PIPER_HOME"
@@ -193,7 +204,7 @@ cd "$PIPER_HOME"
 export PYTHONPATH="$PIPER_HOME/piper/src/python:$PIPER_HOME/piper/src:$PYTHONPATH"
 echo "PYTHONPATH set to: $PYTHONPATH"
 
-# Create or update run_gui.sh script
+# Update the run_gui.sh script
 echo "Updating GUI launcher scripts..."
 cat > "$PIPER_HOME/run_gui.sh" << 'EOL'
 #!/bin/bash
@@ -220,47 +231,72 @@ EOL
 
 chmod +x "$PIPER_HOME/run_gui.sh"
 
-# Create Windows batch launcher
-cat > "$PIPER_HOME/run_gui.bat" << 'EOL'
-@echo off
-REM Piper TTS Trainer - GUI Launcher for Windows
-REM This script activates the virtual environment and launches the Piper TTS Trainer GUI
+# Create script to launch recording studio
+cat > "$PIPER_HOME/run_recording_studio.sh" << 'EOL'
+#!/bin/bash
+# Piper Recording Studio Launcher
 
-echo Starting Piper TTS Trainer GUI...
-echo The interface will be available at: http://localhost:7860
-echo Press Ctrl+C to stop the server
-echo.
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-REM Set PYTHONPATH to include Piper modules
-set "SCRIPT_DIR=%~dp0"
-set "PYTHONPATH=%SCRIPT_DIR%piper\src\python;%SCRIPT_DIR%piper\src;%PYTHONPATH%"
-echo PYTHONPATH set to: %PYTHONPATH%
+# Activate the virtual environment
+source "$SCRIPT_DIR/.venv/bin/activate"
 
-REM Activate the virtual environment and run the GUI script
-call ".venv\Scripts\activate.bat" && python piper_trainer_gui.py
+echo "Starting Piper Recording Studio..."
+echo "The interface will be available at: http://localhost:8000"
+echo "Press Ctrl+C to stop the server"
+echo
 
-REM If we get here, the GUI has been closed
-echo.
-echo GUI server has stopped.
-pause
+# Run the Recording Studio
+cd "$SCRIPT_DIR/piper-recording-studio"
+python3 -m piper_recording_studio
 EOL
+
+chmod +x "$PIPER_HOME/run_recording_studio.sh"
+
+# Create script for exporting dataset
+cat > "$PIPER_HOME/export_dataset.sh" << 'EOL'
+#!/bin/bash
+# Script to export dataset from Recording Studio
+
+# Check if parameters are provided
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <language-code> <output-directory>"
+    echo "Example: $0 en-GB my-dataset"
+    exit 1
+fi
+
+LANG="$1"
+OUTPUT_DIR="$2"
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Activate the virtual environment
+source "$SCRIPT_DIR/.venv/bin/activate"
+
+echo "Exporting dataset for language: $LANG to directory: $OUTPUT_DIR"
+
+# Run the export command
+cd "$SCRIPT_DIR/piper-recording-studio"
+python3 -m export_dataset output/$LANG/ "$SCRIPT_DIR/$OUTPUT_DIR"
+
+echo "Export complete!"
+EOL
+
+chmod +x "$PIPER_HOME/export_dataset.sh"
+
+# Make checkpoint downloader executable
+chmod +x "$PIPER_HOME/download_checkpoints.sh"
 
 echo
 echo "========================================================="
 echo "Setup Complete!"
-echo "========================================================="
 echo
-if [ "$GPU_AVAILABLE" = true ]; then
-    echo "GPU training is enabled for faster voice training."
-else
-    echo "WARNING: No GPU detected. Training will use CPU and be slow."
-    echo "For optimal performance, install on a system with NVIDIA GPU."
-fi
+echo "To run the Piper TTS Trainer GUI, use: ./run_gui.sh"
+echo "To run the Piper Recording Studio, use: ./run_recording_studio.sh"
+echo "To export recording data, use: ./export_dataset.sh <lang-code> <output-dir>"
+echo "To download pre-trained checkpoints, use: ./download_checkpoints.sh"
 echo
-echo "To start the Piper TTS Trainer GUI:"
-echo "  Linux/WSL: ./run_gui.sh"
-echo "  Windows:   run_gui.bat"
-echo
-echo "All functionality is accessible through the GUI interface."
-echo
+echo "For more information, see the guide at: https://ssamjh.nz/create-custom-piper-tts-voice/"
 echo "=========================================================" 
