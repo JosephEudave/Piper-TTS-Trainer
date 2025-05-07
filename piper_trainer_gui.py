@@ -446,7 +446,7 @@ def create_interface():
                 with gr.Row():
                     with gr.Column(scale=3):
                         normalize_dataset_dropdown = gr.Dropdown(
-                            choices=list_datasets,
+                            choices=list_datasets(),
                             label="Select Dataset to Normalize",
                             interactive=True
                         )
@@ -527,7 +527,7 @@ def create_interface():
                             )
                         
                         dataset_dropdown = gr.Dropdown(
-                            choices=list_datasets,
+                            choices=list_datasets(),
                             label="Select Dataset",
                             interactive=True
                         )
@@ -600,14 +600,14 @@ def create_interface():
                 with gr.Row():
                     with gr.Column(scale=2):
                         training_dir_dropdown = gr.Dropdown(
-                            choices=list_training_dirs,
+                            choices=list_training_dirs(),
                             label="Select Training Directory",
                             interactive=True
                         )
                         refresh_training_btn = gr.Button("Refresh Training Directories")
                         
                         checkpoint_dropdown = gr.Dropdown(
-                            choices=list_checkpoints,
+                            choices=list_checkpoints(),
                             label="Resume from Checkpoint (Optional)",
                             interactive=True
                         )
@@ -691,7 +691,7 @@ def create_interface():
                 with gr.Row():
                     with gr.Column(scale=3):
                         export_checkpoint_dropdown = gr.Dropdown(
-                            choices=list_checkpoints,
+                            choices=list_checkpoints(),
                             label="Select Checkpoint to Export",
                             interactive=True
                         )
