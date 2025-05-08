@@ -1,0 +1,198 @@
+#!/bin/bash
+# Fix script for piper_phonemize installation for Poetry environments
+
+set -e  # Exit on error
+
+# Define colors for better output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}=========================================================${NC}"
+echo -e "${YELLOW}Fixing piper_phonemize installation for Poetry${NC}"
+echo -e "${YELLOW}=========================================================${NC}"
+
+# Install required development packages
+echo -e "${YELLOW}Installing required development packages...${NC}"
+sudo apt update
+sudo apt install -y libespeak-ng-dev autoconf automake libtool pkg-config \
+                    build-essential git cmake python3-dev libsonic-dev
+
+# Install the rhasspy fork of espeak-ng
+echo -e "${YELLOW}Building and installing the rhasspy fork of espeak-ng...${NC}"
+mkdir -p downloads
+cd downloads
+
+# Clone rhasspy espeak-ng fork if not already cloned
+if [ ! -d "espeak-ng" ]; then
+    echo -e "${YELLOW}Cloning rhasspy/espeak-ng repository...${NC}"
+    git clone https://github.com/rhasspy/espeak-ng.git
+else
+    echo -e "${YELLOW}Updating existing rhasspy/espeak-ng repository...${NC}"
+    cd espeak-ng
+    git pull
+    cd ..
+fi
+
+# Build and install espeak-ng from the fork
+cd espeak-ng
+echo -e "${YELLOW}Preparing build system...${NC}"
+./autogen.sh
+
+echo -e "${YELLOW}Configuring espeak-ng build...${NC}"
+./configure --prefix=/usr
+
+echo -e "${YELLOW}Building espeak-ng...${NC}"
+make -j$(nproc)
+
+echo -e "${YELLOW}Installing espeak-ng (requires sudo)...${NC}"
+sudo make install
+sudo ldconfig
+
+# Return to the project directory
+cd ../..
+
+# Locate espeak-ng headers and libraries
+echo -e "${YELLOW}Locating espeak-ng headers and libraries...${NC}"
+# First, check the directory
+if [ -d "/usr/include/espeak-ng" ]; then
+    echo -e "${GREEN}✅ espeak-ng directory found at: /usr/include/espeak-ng${NC}"
+    ESPEAK_INCLUDE_DIR="/usr/include/espeak-ng"
+    ESPEAK_HEADER="/usr/include/espeak-ng/espeak_ng.h"
+else
+    # Fall back to older search paths
+    ESPEAK_HEADER=""
+    for header_path in "/usr/include/espeak-ng.h" "/usr/local/include/espeak-ng.h" "/usr/include/espeak-ng/espeak_ng.h"; do
+        if [ -f "$header_path" ]; then
+            ESPEAK_HEADER=$header_path
+            echo -e "${GREEN}✅ espeak-ng.h header file found at: $ESPEAK_HEADER${NC}"
+            break
+        fi
+    done
+
+    if [ -z "$ESPEAK_HEADER" ]; then
+        echo -e "${RED}❌ Error: espeak-ng.h header file not found${NC}"
+        exit 1
+    fi
+    
+    # Extract espeak include directory from header path
+    ESPEAK_INCLUDE_DIR=$(dirname "$ESPEAK_HEADER")
+fi
+
+echo "ESPEAK_INCLUDE_DIR=$ESPEAK_INCLUDE_DIR"
+
+# Build piper_phonemize from source
+echo -e "${YELLOW}Building piper_phonemize from source...${NC}"
+
+# Clone piper-phonemize if it doesn't exist
+if [ ! -d "piper-phonemize" ]; then
+    echo -e "${YELLOW}Cloning piper-phonemize repository...${NC}"
+    git clone https://github.com/rhasspy/piper-phonemize.git
+else
+    echo -e "${YELLOW}Updating existing piper-phonemize repository...${NC}"
+    cd piper-phonemize
+    git pull
+    cd ..
+fi
+
+# Setup directory structure
+if [ ! -d "piper" ]; then
+    echo -e "${YELLOW}Cloning Piper repository...${NC}"
+    git clone https://github.com/rhasspy/piper.git
+fi
+
+# Copy the piper-phonemize directory structure to piper/src if it doesn't exist
+if [ ! -d "piper/src/piper_phonemize" ]; then
+    echo -e "${YELLOW}Creating piper_phonemize in piper/src...${NC}"
+    mkdir -p "piper/src/piper_phonemize"
+    cp -r "piper-phonemize"/* "piper/src/piper_phonemize/"
+fi
+
+# Build the C++ extension
+cd piper/src/piper_phonemize
+echo -e "${YELLOW}Setting up build environment...${NC}"
+
+# Create a build directory
+mkdir -p build
+cd build
+
+# Run CMake with correct path to espeak-ng headers
+echo -e "${YELLOW}Running CMake...${NC}"
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DESPEAK_INCLUDE_DIR=$ESPEAK_INCLUDE_DIR \
+      ..
+
+# Build the extension
+echo -e "${YELLOW}Building...${NC}"
+make -j$(nproc)
+
+# Return to the project directory
+cd ../../../..
+
+# Install the extension using poetry pip
+echo -e "${YELLOW}Installing piper_phonemize with Poetry...${NC}"
+cd piper/src/piper_phonemize
+poetry run pip install --force-reinstall .
+
+# Make sure libtashkeel_model.ort is available
+echo -e "${YELLOW}Setting up libtashkeel_model.ort...${NC}"
+if [ ! -f "libtashkeel_model.ort" ]; then
+    echo -e "${YELLOW}Downloading libtashkeel_model.ort...${NC}"
+    wget --no-verbose -O libtashkeel_model.ort "https://github.com/rhasspy/piper-phonemize/raw/master/etc/libtashkeel_model.ort"
+fi
+
+# Setup environment variable file for runtime
+VENV_DIR=$(poetry env info -p)
+SITE_PACKAGES=$(find "$VENV_DIR" -name "site-packages" -type d | head -n 1)
+
+echo -e "${YELLOW}Creating environment settings file...${NC}"
+cat > "../../../.env_phonemize" << EOL
+# This file is generated by fix_phonemize_poetry.sh
+# It contains environment settings for piper_phonemize
+
+# Location of the piper_phonemize package
+export PYTHONPATH="$SITE_PACKAGES:$PYTHONPATH"
+
+# Set this for properly locating espeak-ng data
+export PHONEMIZE_ESPEAK_DATA="/usr/share/espeak-ng-data"
+
+# Add library paths
+export LD_LIBRARY_PATH="/usr/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib:$LD_LIBRARY_PATH"
+EOL
+
+# Load the environment settings
+source "../../../.env_phonemize"
+
+# Verify installation
+echo -e "${YELLOW}Verifying installation...${NC}"
+cd ../../..
+if poetry run python -c "import piper_phonemize; print('✅ piper_phonemize successfully imported!')" &>/dev/null; then
+    echo -e "${GREEN}✅ piper_phonemize successfully installed in Poetry environment!${NC}"
+    
+    # Test phonemization functionality
+    echo -e "${YELLOW}Testing piper_phonemize functionality...${NC}"
+    TEST_RESULT=$(poetry run python -c "import piper_phonemize; print(piper_phonemize.phonemize('Hello world', 'en-us', True))" 2>&1)
+    
+    if [[ "$TEST_RESULT" == *"phonemes"* ]]; then
+        echo -e "${GREEN}✅ piper_phonemize functionality test passed!${NC}"
+        echo -e "${GREEN}Test output: $TEST_RESULT${NC}"
+    else
+        echo -e "${RED}⚠️ piper_phonemize installed but functionality test failed${NC}"
+        echo -e "${RED}Test output: $TEST_RESULT${NC}"
+        echo -e "${YELLOW}Try running: source .env_phonemize${NC}"
+    fi
+    
+    echo -e "${GREEN}✅ Installation complete!${NC}"
+    echo
+    echo -e "${YELLOW}To use piper_phonemize in your scripts, add these lines:${NC}"
+    echo "source .env_phonemize"
+    echo
+    echo -e "${YELLOW}Now you can run:${NC}"
+    echo "./run_gui.sh"
+else
+    echo -e "${RED}❌ piper_phonemize installation failed in Poetry environment${NC}"
+    exit 1
+fi 

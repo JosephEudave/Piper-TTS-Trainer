@@ -36,55 +36,31 @@ def setup_piper_dependencies():
             # First, make sure espeak-ng is installed (still needed)
             if shutil.which('espeak-ng') is None:
                 subprocess.run(["sudo", "apt", "install", "espeak-ng", "-y"], check=True)
-            
-            # Build monotonic align if it doesn't exist yet
-            monotonic_script_path = os.path.join(PIPER_HOME, "piper/src/python/build_monotonic_align.sh")
-            if os.path.exists(monotonic_script_path):
-                if not os.path.exists(os.path.join(PIPER_HOME, "piper/src/python/monotonic_align/monotonic_align")):
-                    subprocess.run(["sudo", "bash", monotonic_script_path], check=True)
-            
-            # Build and install piper_phonemize in the Poetry environment
-            build_phonemize()
+        
+        # Always build monotonic align when starting the GUI
+        print("Building monotonic alignment module...")
+        monotonic_script_path = os.path.join(PIPER_HOME, "piper/src/python/build_monotonic_align.sh")
+        if os.path.exists(monotonic_script_path):
+            if is_linux:
+                # On Linux/WSL use bash directly
+                print("Running build script with bash...")
+                subprocess.run(["bash", monotonic_script_path], check=True)
+            else:
+                # On Windows, try to use WSL if available
+                print("On Windows, trying to use WSL...")
+                try:
+                    # Try running with WSL
+                    wsl_path = monotonic_script_path.replace("\\", "/")
+                    if wsl_path.startswith("C:"):
+                        wsl_path = "/mnt/c" + wsl_path[2:]
+                    subprocess.run(["wsl", "bash", wsl_path], check=True)
+                except Exception as wsl_error:
+                    print(f"WSL execution failed: {wsl_error}")
+                    print("Please run the build_monotonic_align.sh script manually in WSL")
             
         return "Using Poetry for dependency management. Basic setup completed."
     except Exception as e:
         return f"Error in setup: {str(e)}"
-
-# Add function to build and install piper_phonemize
-def build_phonemize():
-    """Build and install piper_phonemize in the Poetry environment"""
-    try:
-        # Check if piper_phonemize is importable through Poetry
-        try:
-            result = subprocess.run(
-                ["poetry", "run", "python", "-c", "from piper_phonemize import phonemize_espeak; print('OK')"],
-                capture_output=True, 
-                text=True
-            )
-            if "OK" in result.stdout:
-                print("piper_phonemize is already correctly installed")
-                return True
-        except:
-            print("piper_phonemize needs to be installed")
-        
-        # Build and install piper_phonemize
-        phonemize_path = os.path.join(PIPER_HOME, "piper/src/piper_phonemize")
-        if os.path.exists(phonemize_path):
-            # First, build the C++ extension using CMake
-            build_dir = os.path.join(phonemize_path, "build")
-            os.makedirs(build_dir, exist_ok=True)
-            
-            subprocess.run(["cd", build_dir, "&&", "cmake", ".."], shell=True, check=True)
-            subprocess.run(["cd", build_dir, "&&", "make"], shell=True, check=True)
-            
-            # Install the module in development mode in the Poetry environment
-            subprocess.run(["poetry", "run", "pip", "install", "-e", phonemize_path], check=True)
-            
-            print("piper_phonemize built and installed successfully")
-            return True
-    except Exception as e:
-        print(f"Error building piper_phonemize: {str(e)}")
-        return False
 
 # Add function to convert WSL paths to Windows paths and vice versa
 def convert_path_if_needed(path):
@@ -93,7 +69,8 @@ def convert_path_if_needed(path):
         # Convert /mnt/c/... to C:/...
         if path.startswith('/mnt/'):
             drive_letter = path[5:6].upper()
-            return f"{drive_letter}:{path[6:].replace('/', '\\')}"
+            path_suffix = path[6:].replace('/', os.path.sep)
+            return f"{drive_letter}:{path_suffix}"
     else:  # Running on Linux/WSL
         # Convert C:/... or C:\... to /mnt/c/...
         if re.match(r'^[a-zA-Z]:[/\\]', path):
@@ -363,11 +340,15 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
         if not module_check.get("piper_train", False) or not module_check.get("preprocess.py", False):
             return False, None, f"Error: piper_train module not found at {module_check.get('piper_train_path', 'unknown path')}"
         
-        # Check if we need to build piper_phonemize
-        if not module_check.get("piper_phonemize", False):
-            print("Building piper_phonemize module...")
-            if not build_phonemize():
-                return False, None, "Failed to build piper_phonemize module. See console for details."
+        # Check if piper_phonemize is available
+        try:
+            subprocess.run(
+                ["poetry", "run", "python", "-c", "from piper_phonemize import phonemize_espeak; print('OK')"],
+                capture_output=True,
+                check=True
+            )
+        except subprocess.CalledProcessError:
+            return False, None, "Error: piper_phonemize module is not correctly installed. Try running './run_gui.sh' again."
         
         # Convert path if needed
         dataset_dir = convert_path_if_needed(dataset_dir)
@@ -425,22 +406,6 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
             
             # Debug output to help identify the issue
             debug_info = f"Command: {' '.join(cmd)}\nReturn code: {process.returncode}\nPYTHONPATH: {env.get('PYTHONPATH', 'Not set')}\n"
-            
-            # If we see an import error for phonemize_espeak, try to build it again
-            if "ImportError: cannot import name 'phonemize_espeak'" in error_output:
-                print("Attempting to rebuild piper_phonemize...")
-                if build_phonemize():
-                    # Try running the command again
-                    process = subprocess.run(cmd, capture_output=True, text=True, env=env)
-                    
-                    if process.returncode == 0:
-                        log_output = process.stdout
-                        return True, output_dir, f"{debug_info}\n\nSecond attempt succeeded after rebuilding phonemize:\n{log_output}"
-                    else:
-                        error_output = process.stderr
-                
-                debug_info += "\nAttempted to rebuild piper_phonemize\n"
-            
             return False, None, debug_info + error_output
     
     except Exception as e:
@@ -1129,4 +1094,9 @@ def create_interface():
 
 if __name__ == "__main__":
     app = create_interface()
-    app.launch(server_name="0.0.0.0", server_port=7860) 
+    # Try to use port 7860, but fall back to a random port if it's in use
+    try:
+        app.launch(server_name="0.0.0.0", server_port=7860)
+    except OSError:
+        print("Port 7860 is in use, trying a different port...")
+        app.launch(server_name="0.0.0.0", server_port=0)  # Uses a random available port 
