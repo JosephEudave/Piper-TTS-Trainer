@@ -25,6 +25,7 @@ piper-phonemize/
 datasets/
 training/
 output/
+piper-checkpoints/
 
 # Python
 __pycache__/

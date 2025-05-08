@@ -384,13 +384,17 @@ def prepare_dataset(audio_dir, transcription_file=None, output_name=None):
 
 # Preprocess dataset function
 def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeech", single_speaker=True):
+    """
+    Stream preprocess logs while processing dataset
+    """
     try:
         # First, check that all required modules are available
         module_check = check_piper_modules()
         
         # Check piper_train
         if not module_check.get("piper_train", False) or not module_check.get("preprocess.py", False):
-            return False, None, f"Error: piper_train module not found at {module_check.get('piper_train_path', 'unknown path')}"
+            yield False, None, f"Error: piper_train module not found at {module_check.get('piper_train_path', 'unknown path')}"
+            return
         
         # Check if piper_phonemize is available
         try:
@@ -400,7 +404,8 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
                 check=True
             )
         except subprocess.CalledProcessError:
-            return False, None, "Error: piper_phonemize module is not correctly installed. Try running './run_gui.sh' again."
+            yield False, None, "Error: piper_phonemize module is not correctly installed. Try running './run_gui.sh' again."
+            return
         
         # Convert path if needed
         dataset_dir = convert_path_if_needed(dataset_dir)
@@ -447,21 +452,113 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
         if single_speaker:
             cmd.append("--single-speaker")
         
-        # Run preprocessing
-        process = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        # Yield initial status
+        yield True, output_dir, f"Starting preprocessing of {dataset_name}...\nCommand: {' '.join(cmd)}"
+        yield True, output_dir, f"Input directory: {dataset_dir}\nOutput directory: {output_dir}"
         
-        if process.returncode == 0:
-            log_output = process.stdout
-            return True, output_dir, log_output
+        # Check if the input directory has any audio files
+        wavs_dir = os.path.join(dataset_dir, "wavs")
+        audio_files = []
+        if os.path.exists(wavs_dir):
+            audio_files.extend(glob.glob(os.path.join(wavs_dir, "*.wav")))
         else:
-            error_output = process.stderr
-            
-            # Debug output to help identify the issue
-            debug_info = f"Command: {' '.join(cmd)}\nReturn code: {process.returncode}\nPYTHONPATH: {env.get('PYTHONPATH', 'Not set')}\n"
-            return False, None, debug_info + error_output
+            audio_files.extend(glob.glob(os.path.join(dataset_dir, "*.wav")))
+
+        if not audio_files:
+            yield False, output_dir, f"ERROR: No audio files found in {dataset_dir} or {wavs_dir}.\nPreprocessing requires WAV files."
+            return
+        
+        # Check for metadata.csv and validate it
+        metadata_path = os.path.join(dataset_dir, "metadata.csv")
+        if not os.path.exists(metadata_path):
+            yield False, output_dir, f"ERROR: metadata.csv not found in {dataset_dir}.\nPreprocessing requires a metadata.csv file."
+            return
+
+        # Validate metadata.csv format
+        try:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                if not lines:
+                    yield False, output_dir, f"ERROR: metadata.csv is empty in {dataset_dir}."
+                    return
+                
+                # Check the format of each line and verify WAV files exist
+                missing_files = []
+                for i, line in enumerate(lines):
+                    parts = line.strip().split('|')
+                    if len(parts) < 2:
+                        yield False, output_dir, f"ERROR: Line {i+1} in metadata.csv doesn't have the required format (file_id|text)."
+                        return
+                    
+                    # Check if the corresponding WAV file exists
+                    file_id = parts[0]
+                    wav_path = os.path.join(wavs_dir, f"{file_id}.wav")
+                    if not os.path.exists(wav_path):
+                        missing_files.append(file_id)
+                
+                # Report missing files
+                if missing_files:
+                    if len(missing_files) > 10:
+                        missing_examples = ", ".join(missing_files[:10]) + f", and {len(missing_files) - 10} more..."
+                    else:
+                        missing_examples = ", ".join(missing_files)
+                        
+                    yield False, output_dir, f"ERROR: {len(missing_files)} WAV files referenced in metadata.csv not found in {wavs_dir}: {missing_examples}"
+                    return
+                
+                yield True, output_dir, f"Found {len(lines)} entries in metadata.csv with matching WAV files."
+        except Exception as e:
+            yield False, output_dir, f"ERROR: Could not read metadata.csv: {str(e)}"
+            return
+        
+        # Run preprocessing with streaming output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,  # Capture stderr separately for better error tracking
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+            env=env
+        )
+        
+        # Stream stdout for normal updates
+        for line in iter(process.stdout.readline, ""):
+            yield True, output_dir, line.strip()
+        
+        # Handle process completion
+        process.stdout.close()
+        stderr_output = process.stderr.read() if process.stderr else ""
+        process.stderr.close() if process.stderr else None
+        return_code = process.wait()
+        
+        # Check for specific errors in stderr
+        if "n must be at least one" in stderr_output:
+            yield False, None, f"Error: The preprocessing script encountered an empty batch.\n\nThis typically happens when:\n1. Audio files are corrupted or cannot be loaded\n2. There's a mismatch between metadata.csv and the actual files\n3. The preprocessing filters removed all valid samples\n\nTry normalizing your audio files first, and check that they can be played properly.\n\nFull error: {stderr_output}"
+            return
+
+        if return_code == 0:
+            # Check if files were actually created
+            if os.path.exists(os.path.join(output_dir, "train.csv")):
+                yield True, output_dir, f"Preprocessing completed successfully!\nDataset saved to: {output_dir}"
+                
+                # Count the number of processed files
+                try:
+                    with open(os.path.join(output_dir, "train.csv"), 'r', encoding='utf-8') as f:
+                        line_count = sum(1 for _ in f) - 1  # Subtract header
+                    yield True, output_dir, f"Successfully processed {line_count} files."
+                except:
+                    pass
+            else:
+                yield False, output_dir, f"WARNING: Process completed but no files were found in {output_dir}"
+        else:
+            # Display detailed error information
+            yield False, None, f"Preprocessing failed with return code {return_code}\n\nError details:\n{stderr_output}"
     
     except Exception as e:
-        return False, None, str(e)
+        import traceback
+        error_details = traceback.format_exc()
+        yield False, None, f"Error during preprocessing: {str(e)}\n{error_details}"
 
 # Train model function
 def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000, 
@@ -663,14 +760,38 @@ def list_training_dirs():
 
 def list_checkpoints():
     try:
+        print("Listing available checkpoints...")
         checkpoints = []
-        for root, _, files in os.walk(TRAINING_DIR):
+        
+        # Look in TRAINING_DIR
+        print(f"Searching in TRAINING_DIR: {TRAINING_DIR}")
+        for root, dirs, files in os.walk(TRAINING_DIR):
             for file in files:
                 if file.endswith('.ckpt'):
                     rel_path = os.path.relpath(os.path.join(root, file), PIPER_HOME)
                     checkpoints.append(rel_path)
+                    print(f"Found checkpoint in TRAINING_DIR: {rel_path}")
+        
+        # Look in piper-checkpoints directory
+        piper_checkpoints_dir = os.path.join(PIPER_HOME, "piper-checkpoints")
+        print(f"Searching in piper-checkpoints: {piper_checkpoints_dir}")
+        
+        if os.path.exists(piper_checkpoints_dir):
+            for root, dirs, files in os.walk(piper_checkpoints_dir):
+                for file in files:
+                    if file.endswith('.ckpt'):
+                        rel_path = os.path.relpath(os.path.join(root, file), PIPER_HOME)
+                        checkpoints.append(rel_path)
+                        print(f"Found checkpoint in piper-checkpoints: {rel_path}")
+        else:
+            print(f"WARNING: piper-checkpoints directory does not exist at {piper_checkpoints_dir}")
+        
+        print(f"Total checkpoints found: {len(checkpoints)}")
         return checkpoints
-    except:
+    except Exception as e:
+        print(f"Error listing checkpoints: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def download_checkpoint():
@@ -936,20 +1057,49 @@ def create_interface():
                         
                         module_text = "\n".join(module_status)
                         
-                        # Run preprocessing
-                        success, output_dir, log = preprocess_dataset(
+                        # Clear previous log content
+                        log_text = module_text + "\n\n"
+                        yield f"Starting preprocessing...", log_text
+                        
+                        # Run preprocessing with streaming output
+                        preprocess_generator = preprocess_dataset(
                             dataset_path, language, sample_rate, format, single_speaker
                         )
                         
+                        success = True
+                        output_dir = None
+                        
+                        for status_update in preprocess_generator:
+                            current_success, current_dir, message = status_update
+                            success = success and current_success
+                            
+                            if current_dir is not None:
+                                output_dir = current_dir
+                            
+                            # Update the log with the new message
+                            log_text += message + "\n"
+                            
+                            # Update the UI
+                            if success:
+                                status_text = f"Preprocessing in progress... Output in {output_dir}"
+                            else:
+                                status_text = "Preprocessing error. See log for details."
+                            
+                            yield status_text, log_text
+                        
+                        # Final status update
                         if success:
-                            return f"Preprocessing completed successfully. Output in {output_dir}", module_text + "\n\n" + log
+                            final_status = f"Preprocessing completed successfully. Output in {output_dir}"
                         else:
-                            return f"Preprocessing failed. See log for details.", module_text + "\n\n" + log
+                            final_status = "Preprocessing failed. See log for details."
+                        
+                        yield final_status, log_text
                     
                     preprocess_btn.click(
                         run_preprocess,
                         inputs=[dataset_src, dataset_dropdown, language_dropdown, sample_rate, format_dropdown, single_speaker],
-                        outputs=[preprocess_status, preprocess_log]
+                        outputs=[preprocess_status, preprocess_log],
+                        queue=True
                     )
                 
                 # Tab 4: Train Model
@@ -1004,8 +1154,13 @@ def create_interface():
                         outputs=training_dir_dropdown
                     )
                     
+                    def refresh_checkpoints():
+                        checkpoints = list_checkpoints()
+                        print(f"Refreshed checkpoints list with {len(checkpoints)} items")
+                        return gr.update(choices=checkpoints)
+                    
                     refresh_checkpoints_btn.click(
-                        lambda: gr.update(choices=list_checkpoints()),
+                        refresh_checkpoints,
                         outputs=checkpoint_dropdown
                     )
                     
@@ -1097,7 +1252,7 @@ def create_interface():
                     
                     # Event handlers
                     refresh_export_checkpoints_btn.click(
-                        lambda: gr.update(choices=list_checkpoints()),
+                        refresh_checkpoints,
                         outputs=export_checkpoint_dropdown
                     )
                     
