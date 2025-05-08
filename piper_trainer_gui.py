@@ -1123,6 +1123,12 @@ def create_interface():
                             refresh_checkpoints_btn = gr.Button("Refresh Checkpoints")
                             download_ckpt_btn = gr.Button("Download Starter Checkpoint")
                             
+                            use_checkpoint_dir = gr.Checkbox(
+                                label="Use checkpoint directory as dataset (for piper-checkpoints)",
+                                value=False,
+                                info="When checked, uses the directory containing the selected checkpoint as the dataset directory instead of the training directory."
+                            )
+                            
                             batch_size = gr.Slider(minimum=1, maximum=64, step=1, value=32, 
                                                  label="Batch Size")
                             epochs = gr.Number(value=6000, label="Maximum Epochs")
@@ -1169,24 +1175,69 @@ def create_interface():
                         outputs=checkpoint_status
                     )
                     
-                    def start_train(training_dir, checkpoint, batch_size, epochs, quality, precision):
-                        if not training_dir:
-                            return "Please select a training directory"
+                    def start_train(training_dir, checkpoint, use_checkpoint_dir, batch_size, epochs, quality, precision):
+                        # First determine which directory to use as the dataset directory
+                        if checkpoint and use_checkpoint_dir:
+                            # Use the directory containing the checkpoint
+                            if os.path.exists(checkpoint):
+                                # Direct path
+                                checkpoint_dir = os.path.dirname(checkpoint)
+                            else:
+                                # Relative path
+                                full_checkpoint = os.path.join(PIPER_HOME, checkpoint)
+                                checkpoint_dir = os.path.dirname(full_checkpoint)
+                            
+                            dataset_dir = checkpoint_dir
+                            print(f"Using checkpoint directory as dataset: {dataset_dir}")
+                        else:
+                            # Use the training directory
+                            if not training_dir:
+                                return "Please select a training directory"
+                            
+                            dataset_dir = os.path.join(TRAINING_DIR, training_dir)
+                            print(f"Using training directory as dataset: {dataset_dir}")
                         
-                        full_training_dir = os.path.join(TRAINING_DIR, training_dir)
-                        full_training_dir = convert_path_if_needed(full_training_dir)
+                        dataset_dir = convert_path_if_needed(dataset_dir)
                         
-                        if not os.path.exists(full_training_dir):
-                            return f"Training directory not found: {full_training_dir}"
+                        if not os.path.exists(dataset_dir):
+                            return f"Dataset directory not found: {dataset_dir}"
+                        
+                        # Check for dataset files
+                        config_json = os.path.join(dataset_dir, "config.json")
+                        dataset_jsonl = os.path.join(dataset_dir, "dataset.jsonl")
+                        dataset_jsonl_gz = dataset_jsonl + ".gz"
+                        
+                        print(f"Checking for config.json: {os.path.exists(config_json)}")
+                        print(f"Checking for dataset.jsonl: {os.path.exists(dataset_jsonl)}")
+                        print(f"Checking for dataset.jsonl.gz: {os.path.exists(dataset_jsonl_gz)}")
+                        
+                        if not os.path.exists(config_json):
+                            return f"config.json not found in {dataset_dir}. Make sure preprocessing was completed."
+                            
+                        if not os.path.exists(dataset_jsonl) and not os.path.exists(dataset_jsonl_gz):
+                            return f"dataset.jsonl not found in {dataset_dir}. Make sure preprocessing was completed."
                         
                         if checkpoint:
-                            full_checkpoint = os.path.join(PIPER_HOME, checkpoint)
+                            # Check if this is a direct checkpoint path or a relative path 
+                            if os.path.exists(checkpoint):
+                                # Direct path
+                                full_checkpoint = checkpoint
+                            else:
+                                # Relative path
+                                full_checkpoint = os.path.join(PIPER_HOME, checkpoint)
+                                
                             full_checkpoint = convert_path_if_needed(full_checkpoint)
+                            
+                            print(f"Using checkpoint: {full_checkpoint}")
+                            print(f"Checkpoint exists: {os.path.exists(full_checkpoint)}")
+                            if os.path.exists(full_checkpoint):
+                                print(f"Checkpoint file size: {os.path.getsize(full_checkpoint)/1024/1024:.2f} MB")
                         else:
                             full_checkpoint = None
+                            print("No checkpoint selected, training from scratch")
                         
                         return train_model(
-                            full_training_dir, 
+                            dataset_dir, 
                             full_checkpoint, 
                             int(batch_size), 
                             int(epochs), 
@@ -1196,7 +1247,7 @@ def create_interface():
                     
                     train_btn.click(
                         start_train,
-                        inputs=[training_dir_dropdown, checkpoint_dropdown, batch_size, epochs, quality, precision],
+                        inputs=[training_dir_dropdown, checkpoint_dropdown, use_checkpoint_dir, batch_size, epochs, quality, precision],
                         outputs=training_output
                     )
                 
