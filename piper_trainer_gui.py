@@ -35,16 +35,40 @@ def setup_piper_dependencies():
         if is_linux:
             # First, make sure espeak-ng is installed (still needed)
             if shutil.which('espeak-ng') is None:
+                print("Installing espeak-ng...")
                 subprocess.run(["sudo", "apt", "install", "espeak-ng", "-y"], check=True)
         
         # Always build monotonic align when starting the GUI
         print("Building monotonic alignment module...")
         monotonic_script_path = os.path.join(PIPER_HOME, "piper/src/python/build_monotonic_align.sh")
+        
         if os.path.exists(monotonic_script_path):
+            print(f"Found build script at: {monotonic_script_path}")
+            
+            # Check script permissions
+            if is_linux and not os.access(monotonic_script_path, os.X_OK):
+                print("Making build script executable...")
+                subprocess.run(["chmod", "+x", monotonic_script_path], check=True)
+            
             if is_linux:
                 # On Linux/WSL use bash directly
                 print("Running build script with bash...")
-                subprocess.run(["bash", monotonic_script_path], check=True)
+                try:
+                    # Capture output for debugging
+                    result = subprocess.run(
+                        ["bash", monotonic_script_path], 
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    print(f"Build script output:\n{result.stdout}")
+                    if result.stderr:
+                        print(f"Build script errors:\n{result.stderr}")
+                except subprocess.CalledProcessError as e:
+                    print(f"Build script failed with exit code {e.returncode}")
+                    print(f"Output: {e.stdout}")
+                    print(f"Error: {e.stderr}")
+                    raise e
             else:
                 # On Windows, try to use WSL if available
                 print("On Windows, trying to use WSL...")
@@ -53,14 +77,42 @@ def setup_piper_dependencies():
                     wsl_path = monotonic_script_path.replace("\\", "/")
                     if wsl_path.startswith("C:"):
                         wsl_path = "/mnt/c" + wsl_path[2:]
-                    subprocess.run(["wsl", "bash", wsl_path], check=True)
+                    print(f"WSL path: {wsl_path}")
+                    result = subprocess.run(
+                        ["wsl", "bash", wsl_path], 
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    print(f"WSL output:\n{result.stdout}")
+                    if result.stderr:
+                        print(f"WSL errors:\n{result.stderr}")
                 except Exception as wsl_error:
                     print(f"WSL execution failed: {wsl_error}")
                     print("Please run the build_monotonic_align.sh script manually in WSL")
+        else:
+            print(f"WARNING: Could not find build script at: {monotonic_script_path}")
+        
+        # Check if the module was successfully built
+        monotonic_align_dir = os.path.join(PIPER_HOME, "piper/src/python/piper_train/vits/monotonic_align/monotonic_align")
+        if os.path.exists(monotonic_align_dir):
+            so_files = glob.glob(os.path.join(monotonic_align_dir, "*.so"))
+            if so_files:
+                print(f"Found {len(so_files)} compiled modules in {monotonic_align_dir}:")
+                for so_file in so_files:
+                    print(f"  - {os.path.basename(so_file)}")
+            else:
+                print(f"WARNING: No .so files found in {monotonic_align_dir}")
+        else:
+            print(f"WARNING: Directory not found: {monotonic_align_dir}")
             
-        return "Using Poetry for dependency management. Basic setup completed."
+        return "Using Poetry for dependency management. Basic setup completed. Check console for detailed logs."
     except Exception as e:
-        return f"Error in setup: {str(e)}"
+        error_message = f"Error in setup: {str(e)}"
+        print(error_message)
+        import traceback
+        traceback.print_exc()
+        return error_message
 
 # Add function to convert WSL paths to Windows paths and vice versa
 def convert_path_if_needed(path):
