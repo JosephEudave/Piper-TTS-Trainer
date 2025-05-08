@@ -198,17 +198,39 @@ Piper TTS Trainer provides an end-to-end solution for creating, recording, and t
 - **Storage**: At least 20GB free space
 - **Memory**: 16GB RAM recommended (8GB minimum)
 - **GPU**: NVIDIA GPU with CUDA support recommended for faster training
-- **Audio**: Microphone (for recording datasets)
+
+## WSL Setup for Windows Users
+
+If you're using Windows, you'll need to install and configure WSL2:
+
+1. Open PowerShell as administrator and run:
+   ```powershell
+   wsl --install
+   ```
+
+2. Once WSL is installed and you've set up your Ubuntu distribution, you'll need to install the required packages:
+   ```bash
+   sudo apt update
+   sudo apt install python3-poetry
+   ```
+
+3. If using the Poetry version of the software, make sure python3-poetry is installed:
+   ```bash
+   sudo apt install python3-poetry
+   ```
+
+The scripts in this repository will check for and install python3-poetry if it's not found.
 
 ## Installation
 
-### Option 1: Automatic Setup with Poetry (Recommended)
+You can install Piper TTS Trainer using one of the following methods:
+
+### Method 1: Use the setup script (Recommended)
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/josepheudave/Piper-TTS-Trainer.git
-   cd Piper-TTS-Trainer
-   in wls cd /mnt/path/to/Piper-TTS-Trainer
+   git clone https://github.com/username/piper-tts-trainer.git
+   cd piper-tts-trainer
    ```
 
 2. Run the setup script:
@@ -229,7 +251,7 @@ Piper TTS Trainer provides an end-to-end solution for creating, recording, and t
    bash download_checkpoints.sh
    ```
 
-### Option 2: Manual Setup
+### Method 2: Manual Setup
 
 For advanced users who prefer manual configuration, follow these steps:
 

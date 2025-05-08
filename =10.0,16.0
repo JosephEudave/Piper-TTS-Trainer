@@ -31,20 +31,33 @@ If you prefer to upgrade it to the latest available version, you can use `poetry
 Updating dependencies
 Resolving dependencies...
 
-Package operations: 45 installs, 6 updates, 0 removals
+Package operations: 0 installs, 2 updates, 0 removals
 
-  - Downgrading numpy (2.2.5 -> 1.24.3)
+  - Downgrading groovy (0.1.2 -> 0.1.0)
+  - Downgrading orjson (3.9.10 -> 3.0.0)
 
-PEP517 build of a dependency failed
+  ChefBuildError
 
-Backend 'setuptools.build_meta:__legacy__' is not available.
+  Backend subprocess exited when trying to invoke build_wheel
+  
+  💥 maturin failed
+    Caused by: Cargo metadata failed. Do you have cargo in your PATH?
+    Caused by: No such file or directory (os error 2)
+    Caused by: No such file or directory (os error 2)
+  Running `maturin pep517 build-wheel -i python --manylinux=off --strip=on`
+  Error: Command '['maturin', 'pep517', 'build-wheel', '-i', 'python', '--manylinux=off', '--strip=on']' returned non-zero exit status 1.
+  
 
-Note: This error originates from the build backend, and is likely not a problem with poetry but one of the following issues with numpy (1.24.3)
+  at /usr/lib/python3/dist-packages/poetry/installation/chef.py:164 in _prepare
+      160│ 
+      161│                 error = ChefBuildError("\n\n".join(message_parts))
+      162│ 
+      163│             if error is not None:
+    → 164│                 raise error from None
+      165│ 
+      166│             return path
+      167│ 
+      168│     def _prepare_sdist(self, archive: Path, destination: Path | None = None) -> Path:
 
-  - not supporting PEP 517 builds
-  - not specifying PEP 517 build requirements correctly
-  - the build requirements are incompatible with your operating system or Python version
-  - the build requirements are missing system dependencies (eg: compilers, libraries, headers).
-
-You can verify this by running pip wheel --no-cache-dir --use-pep517 "numpy (==1.24.3)".
+Note: This error originates from the build backend, and is likely not a problem with poetry but with orjson (3.0.0) not supporting PEP 517 builds. You can verify this by running 'pip wheel --no-cache-dir --use-pep517 "orjson (==3.0.0)"'.
 

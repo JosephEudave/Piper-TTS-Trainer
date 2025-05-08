@@ -28,55 +28,63 @@ NORMALIZED_DIR = os.path.join(PIPER_HOME, "normalized_wavs")
 def setup_piper_dependencies():
     """Install and configure dependencies for Piper TTS"""
     try:
-        # Check if we're on WSL or Linux
+        # Since we're using Poetry, we'll skip the automatic dependency installation
+        # Simply check if we're on WSL or Linux for espeak-ng
         is_linux = os.name != 'nt'
         
         if is_linux:
-            # First, make sure espeak-ng is installed
-            subprocess.run(["sudo", "apt", "install", "espeak-ng", "-y"], check=True)
+            # First, make sure espeak-ng is installed (still needed)
+            if shutil.which('espeak-ng') is None:
+                subprocess.run(["sudo", "apt", "install", "espeak-ng", "-y"], check=True)
             
-            # Build monotonic align
+            # Build monotonic align if it doesn't exist yet
             monotonic_script_path = os.path.join(PIPER_HOME, "piper/src/python/build_monotonic_align.sh")
             if os.path.exists(monotonic_script_path):
-                subprocess.run(["sudo", "bash", monotonic_script_path], check=True)
+                if not os.path.exists(os.path.join(PIPER_HOME, "piper/src/python/monotonic_align/monotonic_align")):
+                    subprocess.run(["sudo", "bash", monotonic_script_path], check=True)
             
-            # Check if we need to set up the Python environment
-            venv_path = os.path.join(PIPER_HOME, ".venv")
-            if not os.path.exists(venv_path):
-                # Create virtual environment
-                subprocess.run(["python3", "-m", "venv", venv_path], check=True)
+            # Build and install piper_phonemize in the Poetry environment
+            build_phonemize()
             
-            # Activate and install dependencies
-            pip_path = os.path.join(venv_path, "bin", "pip")
-            
-            # Install dependencies
-            subprocess.run([pip_path, "install", "--upgrade", "pip"], check=True)
-            subprocess.run([pip_path, "install", "--upgrade", "wheel", "setuptools"], check=True)
-            
-            # Install piper in editable mode
-            piper_src_path = os.path.join(PIPER_HOME, "piper/src/python")
-            if os.path.exists(piper_src_path):
-                subprocess.run([pip_path, "install", "-e", piper_src_path], check=True)
-            
-            # Install specific version of torchmetrics
-            subprocess.run([pip_path, "install", "torchmetrics==0.11.4"], check=True)
-            
-            # Fix for libcuda error in WSL
-            if "WSL" in subprocess.check_output(["uname", "-r"], text=True):
-                try:
-                    subprocess.run([
-                        "sudo", "rm", "-r", "/usr/lib/wsl/lib/libcuda.so.1", "&&", 
-                        "sudo", "rm", "-r", "/usr/lib/wsl/lib/libcuda.so", "&&", 
-                        "sudo", "ln", "-s", "/usr/lib/wsl/lib/libcuda.so.1.1", "/usr/lib/wsl/lib/libcuda.so.1", "&&", 
-                        "sudo", "ln", "-s", "/usr/lib/wsl/lib/libcuda.so.1.1", "/usr/lib/wsl/lib/libcuda.so", "&&", 
-                        "sudo", "ldconfig"
-                    ], shell=True, check=False)
-                except:
-                    pass
-            
-        return "Dependencies set up successfully"
+        return "Using Poetry for dependency management. Basic setup completed."
     except Exception as e:
-        return f"Error setting up dependencies: {str(e)}"
+        return f"Error in setup: {str(e)}"
+
+# Add function to build and install piper_phonemize
+def build_phonemize():
+    """Build and install piper_phonemize in the Poetry environment"""
+    try:
+        # Check if piper_phonemize is importable through Poetry
+        try:
+            result = subprocess.run(
+                ["poetry", "run", "python", "-c", "from piper_phonemize import phonemize_espeak; print('OK')"],
+                capture_output=True, 
+                text=True
+            )
+            if "OK" in result.stdout:
+                print("piper_phonemize is already correctly installed")
+                return True
+        except:
+            print("piper_phonemize needs to be installed")
+        
+        # Build and install piper_phonemize
+        phonemize_path = os.path.join(PIPER_HOME, "piper/src/piper_phonemize")
+        if os.path.exists(phonemize_path):
+            # First, build the C++ extension using CMake
+            build_dir = os.path.join(phonemize_path, "build")
+            os.makedirs(build_dir, exist_ok=True)
+            
+            subprocess.run(["cd", build_dir, "&&", "cmake", ".."], shell=True, check=True)
+            subprocess.run(["cd", build_dir, "&&", "make"], shell=True, check=True)
+            
+            # Install the module in development mode in the Poetry environment
+            subprocess.run(["poetry", "run", "pip", "install", "-e", phonemize_path], check=True)
+            
+            print("piper_phonemize built and installed successfully")
+            return True
+    except Exception as e:
+        print(f"Error building piper_phonemize: {str(e)}")
+        return False
 
 # Add function to convert WSL paths to Windows paths and vice versa
 def convert_path_if_needed(path):
@@ -113,24 +121,35 @@ LANGUAGES = {
     "pt": "Portuguese"
 }
 
-# Get Python executable with venv
+# Get Python executable with Poetry
 def get_piper_python():
+    # Use Poetry's virtual environment for Python
     if os.name == 'nt':  # Windows
-        venv_python = os.path.join(PIPER_HOME, ".venv\\Scripts\\python.exe")
-    else:  # Linux/Mac
-        venv_python = os.path.join(PIPER_HOME, ".venv/bin/python3")
-    
-    # Check if the virtual environment exists
-    if not os.path.exists(venv_python):
-        print(f"Warning: Python virtual environment not found at {venv_python}")
-        # Fall back to system Python if venv not found
-        return "python" if os.name == 'nt' else "python3"
+        # Try to get Poetry's Python path through a command
+        try:
+            poetry_env = subprocess.check_output(["poetry", "env", "info", "-p"], text=True).strip()
+            venv_python = os.path.join(poetry_env, "Scripts", "python.exe")
+            if os.path.exists(venv_python):
+                return venv_python
+        except:
+            pass  # Fall back to default python if poetry command fails
         
-    return venv_python
+        return "python"  # Fallback on Windows
+    else:  # Linux/Mac
+        # Try to get Poetry's Python path
+        try:
+            poetry_env = subprocess.check_output(["poetry", "env", "info", "-p"], text=True).strip()
+            venv_python = os.path.join(poetry_env, "bin", "python")
+            if os.path.exists(venv_python):
+                return venv_python
+        except:
+            pass  # Fall back to default python3 if poetry command fails
+        
+        return "python3"  # Fallback on Linux/Mac
 
 # Get command to run Piper modules correctly
 def get_piper_command(module_name):
-    """Create a command that runs the module in the Python virtual environment"""
+    """Create a command that runs the module in the Poetry Python environment"""
     python_exe = get_piper_python()
     
     # Set up environment with PYTHONPATH to find Piper modules
@@ -166,13 +185,16 @@ def get_piper_command(module_name):
     
     env['PYTHONPATH'] = path_sep.join(python_paths)
     
-    # Return the command and environment
+    # For Poetry, we should use "poetry run" instead of a specific python path
+    # to ensure all dependencies are correctly loaded
     if module_name.startswith("piper_train."):
-        # For piper_train modules, use -m flag for proper module resolution
-        return [python_exe, "-m", module_name], env
+        # For piper_train modules
+        cmd = ["poetry", "run", "python", "-m", module_name]
     else:
         # For other modules
-        return [python_exe, "-m", module_name], env
+        cmd = ["poetry", "run", "python", "-m", module_name]
+    
+    return cmd, env
 
 # Audio normalization functions
 def normalize_audio_file(
@@ -341,15 +363,11 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
         if not module_check.get("piper_train", False) or not module_check.get("preprocess.py", False):
             return False, None, f"Error: piper_train module not found at {module_check.get('piper_train_path', 'unknown path')}"
         
-        # Check piper_phonemize
+        # Check if we need to build piper_phonemize
         if not module_check.get("piper_phonemize", False):
-            # Try to set up dependencies again if piper_phonemize is missing
-            setup_result = setup_piper_dependencies()
-            # Check modules again after setup
-            module_check = check_piper_modules()
-            
-            if not module_check.get("piper_phonemize", False):
-                return False, None, f"Error: piper_phonemize module not found at {module_check.get('piper_phonemize_path', 'unknown path')}. Setup result: {setup_result}"
+            print("Building piper_phonemize module...")
+            if not build_phonemize():
+                return False, None, "Failed to build piper_phonemize module. See console for details."
         
         # Convert path if needed
         dataset_dir = convert_path_if_needed(dataset_dir)
@@ -359,8 +377,30 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
         output_dir = os.path.join(TRAINING_DIR, dataset_name)
         output_dir = convert_path_if_needed(output_dir)
         
-        # Build command
-        cmd, env = get_piper_command("piper_train.preprocess")
+        # Build command - using Poetry directly
+        cmd = ["poetry", "run", "python", "-m", "piper_train.preprocess"]
+        
+        # Set up environment with PYTHONPATH to find Piper modules
+        env = os.environ.copy()
+        
+        # Create paths to Piper modules for PYTHONPATH
+        if os.name == 'nt':  # Windows
+            piper_src = os.path.join(PIPER_HOME, "piper\\src\\python")
+            piper_parent = os.path.join(PIPER_HOME, "piper\\src")
+            path_sep = ";"
+        else:  # Linux/Mac
+            piper_src = os.path.join(PIPER_HOME, "piper/src/python")
+            piper_parent = os.path.join(PIPER_HOME, "piper/src")
+            path_sep = ":"
+        
+        # Convert paths if needed
+        piper_src = convert_path_if_needed(piper_src)
+        piper_parent = convert_path_if_needed(piper_parent)
+        
+        # Set PYTHONPATH
+        env['PYTHONPATH'] = f"{piper_src}{path_sep}{piper_parent}"
+        if 'PYTHONPATH' in os.environ:
+            env['PYTHONPATH'] = f"{env['PYTHONPATH']}{path_sep}{os.environ['PYTHONPATH']}"
         
         # Add preprocessing arguments
         cmd.extend([
@@ -386,33 +426,20 @@ def preprocess_dataset(dataset_dir, language, sample_rate=22050, format="ljspeec
             # Debug output to help identify the issue
             debug_info = f"Command: {' '.join(cmd)}\nReturn code: {process.returncode}\nPYTHONPATH: {env.get('PYTHONPATH', 'Not set')}\n"
             
-            # Try to fix the environment if there's an import error
+            # If we see an import error for phonemize_espeak, try to build it again
             if "ImportError: cannot import name 'phonemize_espeak'" in error_output:
-                # Try setting up dependencies again
-                setup_result = setup_piper_dependencies()
-                debug_info += f"\nAttempted to fix dependencies: {setup_result}\n"
+                print("Attempting to rebuild piper_phonemize...")
+                if build_phonemize():
+                    # Try running the command again
+                    process = subprocess.run(cmd, capture_output=True, text=True, env=env)
+                    
+                    if process.returncode == 0:
+                        log_output = process.stdout
+                        return True, output_dir, f"{debug_info}\n\nSecond attempt succeeded after rebuilding phonemize:\n{log_output}"
+                    else:
+                        error_output = process.stderr
                 
-                # Try running the command again with a fresh environment
-                cmd, env = get_piper_command("piper_train.preprocess")
-                cmd.extend([
-                    "--language", language,
-                    "--input-dir", dataset_dir,
-                    "--output-dir", output_dir,
-                    "--dataset-format", format,
-                    "--sample-rate", str(sample_rate)
-                ])
-                if single_speaker:
-                    cmd.append("--single-speaker")
-                
-                # Run preprocessing again
-                process = subprocess.run(cmd, capture_output=True, text=True, env=env)
-                
-                if process.returncode == 0:
-                    log_output = process.stdout
-                    return True, output_dir, f"{debug_info}\n\nSecond attempt succeeded:\n{log_output}"
-                else:
-                    error_output = process.stderr
-                    debug_info += f"\nSecond attempt failed:\n{error_output}"
+                debug_info += "\nAttempted to rebuild piper_phonemize\n"
             
             return False, None, debug_info + error_output
     
@@ -431,8 +458,30 @@ def train_model(training_dir, checkpoint_path=None, batch_size=32, epochs=6000,
         # Check for GPU
         gpu_available = torch.cuda.is_available()
         
-        # Build command
-        cmd, env = get_piper_command("piper_train")
+        # Build command using Poetry directly
+        cmd = ["poetry", "run", "python", "-m", "piper_train"]
+        
+        # Set up environment with PYTHONPATH to find Piper modules
+        env = os.environ.copy()
+        
+        # Create paths to Piper modules for PYTHONPATH
+        if os.name == 'nt':  # Windows
+            piper_src = os.path.join(PIPER_HOME, "piper\\src\\python")
+            piper_parent = os.path.join(PIPER_HOME, "piper\\src")
+            path_sep = ";"
+        else:  # Linux/Mac
+            piper_src = os.path.join(PIPER_HOME, "piper/src/python")
+            piper_parent = os.path.join(PIPER_HOME, "piper/src")
+            path_sep = ":"
+        
+        # Convert paths if needed
+        piper_src = convert_path_if_needed(piper_src)
+        piper_parent = convert_path_if_needed(piper_parent)
+        
+        # Set PYTHONPATH
+        env['PYTHONPATH'] = f"{piper_src}{path_sep}{piper_parent}"
+        if 'PYTHONPATH' in os.environ:
+            env['PYTHONPATH'] = f"{env['PYTHONPATH']}{path_sep}{os.environ['PYTHONPATH']}"
         
         # Add training arguments
         cmd.extend([
@@ -508,8 +557,32 @@ def export_model_to_onnx(checkpoint_path, output_path, streaming=False):
         # Determine which exporter to use
         export_module = "piper_train.export_onnx_streaming" if streaming else "piper_train.export_onnx"
         
-        # Build command
-        cmd, env = get_piper_command(export_module)
+        # Build command using Poetry directly
+        cmd = ["poetry", "run", "python", "-m", export_module]
+        
+        # Set up environment with PYTHONPATH to find Piper modules
+        env = os.environ.copy()
+        
+        # Create paths to Piper modules for PYTHONPATH
+        if os.name == 'nt':  # Windows
+            piper_src = os.path.join(PIPER_HOME, "piper\\src\\python")
+            piper_parent = os.path.join(PIPER_HOME, "piper\\src")
+            path_sep = ";"
+        else:  # Linux/Mac
+            piper_src = os.path.join(PIPER_HOME, "piper/src/python")
+            piper_parent = os.path.join(PIPER_HOME, "piper/src")
+            path_sep = ":"
+        
+        # Convert paths if needed
+        piper_src = convert_path_if_needed(piper_src)
+        piper_parent = convert_path_if_needed(piper_parent)
+        
+        # Set PYTHONPATH
+        env['PYTHONPATH'] = f"{piper_src}{path_sep}{piper_parent}"
+        if 'PYTHONPATH' in os.environ:
+            env['PYTHONPATH'] = f"{env['PYTHONPATH']}{path_sep}{os.environ['PYTHONPATH']}"
+            
+        # Add model paths
         cmd.extend([checkpoint_path, output_path])
         
         # Run export process
